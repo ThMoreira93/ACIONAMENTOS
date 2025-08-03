@@ -1719,12 +1719,16 @@
                 const id = document.getElementById('editId').value;
                 const acionamentoRef = db.collection('acionamentos').doc(id);
                 const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
 
+                const agora = new Date();
                 const novoHistorico = {
-                    data: new Date().toISOString(),
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
                     usuario: currentUser.username,
-                    acao: 'Dados editados'
+                    acao: 'Dados editados',
+                    status_anterior: doc.exists ? doc.data().status : null,
+                    status_novo: doc.exists ? doc.data().status : null
                 };
 
                 const dadosAtualizados = {
@@ -1739,7 +1743,7 @@
                     clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
                     relatorio_ocorrencia: document.getElementById('editRelatorio').value,
                     materiais_necessarios: document.getElementById('editMateriais').value,
-                    historico: [...historicoAtual, novoHistorico]
+                    historico_status: [...historicoAtual, novoHistorico]
                 };
 
                 await acionamentoRef.update(dadosAtualizados);
@@ -1761,19 +1765,23 @@
                 
                 const acionamentoRef = db.collection('acionamentos').doc(id);
                 const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
 
+                const agora = new Date();
                 const novoHistorico = {
-                    data: new Date().toISOString(),
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
                     usuario: currentUser.username,
-                    acao: 'Acionamento validado e enviado'
+                    acao: 'Acionamento validado e enviado',
+                    status_anterior: 'PENDENTE',
+                    status_novo: 'ENVIADO'
                 };
 
                 await acionamentoRef.update({
                     status: 'ENVIADO',
                     data_validacao: new Date().toISOString(),
                     validado_por: currentUser.username,
-                    historico: [...historicoAtual, novoHistorico]
+                    historico_status: [...historicoAtual, novoHistorico]
                 });
                 
                 closeEditModal();
@@ -1796,12 +1804,16 @@
                 
                 const acionamentoRef = db.collection('acionamentos').doc(id);
                 const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
 
+                const agora = new Date();
                 const novoHistorico = {
-                    data: new Date().toISOString(),
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
                     usuario: currentUser.username,
-                    acao: `Recurso alocado - Equipe: ${equipe}`
+                    acao: `Recurso alocado - Equipe: ${equipe}`,
+                    status_anterior: 'ENVIADO',
+                    status_novo: 'RECURSO_ALOCADO'
                 };
 
                 await acionamentoRef.update({
@@ -1809,7 +1821,7 @@
                     data_alocacao: new Date().toISOString(),
                     alocado_por: currentUser.username,
                     equipe: equipe,
-                    historico: [...historicoAtual, novoHistorico]
+                    historico_status: [...historicoAtual, novoHistorico]
                 });
                 
                 closeEditModal();
@@ -1829,19 +1841,23 @@
                 
                 const acionamentoRef = db.collection('acionamentos').doc(id);
                 const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
 
+                const agora = new Date();
                 const novoHistorico = {
-                    data: new Date().toISOString(),
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
                     usuario: currentUser.username,
-                    acao: 'Acionamento finalizado'
+                    acao: 'Acionamento finalizado',
+                    status_anterior: 'RECURSO_ALOCADO',
+                    status_novo: 'FINALIZADO'
                 };
 
                 await acionamentoRef.update({
                     status: 'FINALIZADO',
                     data_finalizacao: new Date().toISOString(),
                     finalizado_por: currentUser.username,
-                    historico: [...historicoAtual, novoHistorico]
+                    historico_status: [...historicoAtual, novoHistorico]
                 });
                 
                 closeEditModal();
@@ -2094,31 +2110,72 @@
                     }
                 }
                 
+                // Função auxiliar para extrair dados do histórico por status
+                function getHistoricoByStatus(historico, status) {
+                    if (!historico || !Array.isArray(historico)) return { data: '', hora: '', usuario: '' };
+                    
+                    const entrada = historico.find(h => h.status_novo === status);
+                    return entrada ? {
+                        data: entrada.data || '',
+                        hora: entrada.hora || '',
+                        usuario: entrada.usuario || ''
+                    } : { data: '', hora: '', usuario: '' };
+                }
+                
                 // Preparar dados para exportação
-                const exportData = dataToExport.map(acionamento => ({
-                    'Número da Ocorrência': acionamento.numero_ocorrencia || acionamento.id,
-                    'Data de Criação': acionamento.data_criacao_ocorrencia || '',
-                    'Horário de Criação': acionamento.horario_criacao_ocorrencia || '',
-                    'Equipe': acionamento.equipe || '',
-                    'Tipo de Equipe': acionamento.tipo_equipe || '',
-                    'Tipo de Defeito': acionamento.tipo_defeito || '',
-                    'Alimentador': acionamento.alimentador || '',
-                    'Tipo de Referência': acionamento.tipo_referencia || '',
-                    'Número da Referência': acionamento.numero_referencia || '',
-                    'Clientes Interrompidos': acionamento.clientes_interrompidos || '',
-                    'Relatório da Ocorrência': acionamento.relatorio_ocorrencia || '',
-                    'Materiais Necessários': acionamento.materiais_necessarios || '',
-                    'Status': getStatusLabel(acionamento.status),
-                    'Data de Acionamento': formatarData(acionamento.data_acionamento) || '',
-                    'Data de Envio': formatarData(acionamento.data_envio) || '',
-                    'Data de Alocação da Turma': formatarData(acionamento.data_alocacao_turma) || '',
-                    'Data de Finalização da Ocorrência': formatarData(acionamento.data_finalizacao) || '',
-                    'Tempo desde Criação': calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, acionamento.data_finalizacao, acionamento.hora_finalizacao),
-                    'Tempo desde Acionamento': calcularTempoDecorrido(acionamento.data_acionamento, null, acionamento.data_finalizacao, acionamento.hora_finalizacao),
-                    'Validado por': acionamento.validado_por || '',
-                    'Alocado por': acionamento.alocado_por || '',
-                    'Finalizado por': acionamento.finalizado_por || ''
-                }));
+                const exportData = dataToExport.map(acionamento => {
+                    const historico = acionamento.historico_status || [];
+                    
+                    // Extrair dados do histórico para cada status
+                    const pendente = getHistoricoByStatus(historico, 'PENDENTE');
+                    const enviado = getHistoricoByStatus(historico, 'ENVIADO');
+                    const recursoAlocado = getHistoricoByStatus(historico, 'RECURSO_ALOCADO');
+                    const finalizado = getHistoricoByStatus(historico, 'FINALIZADO');
+                    
+                    return {
+                        'Número da Ocorrência': acionamento.numero_ocorrencia || acionamento.id,
+                        'Data de Criação': acionamento.data_criacao_ocorrencia || '',
+                        'Horário de Criação': acionamento.horario_criacao_ocorrencia || '',
+                        'Equipe': acionamento.equipe || '',
+                        'Tipo de Equipe': acionamento.tipo_equipe || '',
+                        'Tipo de Defeito': acionamento.tipo_defeito || '',
+                        'Alimentador': acionamento.alimentador || '',
+                        'Tipo de Referência': acionamento.tipo_referencia || '',
+                        'Número da Referência': acionamento.numero_referencia || '',
+                        'Clientes Interrompidos': acionamento.clientes_interrompidos || '',
+                        'Relatório da Ocorrência': acionamento.relatorio_ocorrencia || '',
+                        'Materiais Necessários': acionamento.materiais_necessarios || '',
+                        'Status': getStatusLabel(acionamento.status),
+                        
+                        // Colunas do histórico de status
+                        'Data Pendente': pendente.data,
+                        'Hora Pendente': pendente.hora,
+                        'Usuário Pendente': pendente.usuario,
+                        
+                        'Data Enviado': enviado.data,
+                        'Hora Enviado': enviado.hora,
+                        'Usuário Enviado': enviado.usuario,
+                        
+                        'Data Com Recurso Alocado': recursoAlocado.data,
+                        'Hora Com Recurso Alocado': recursoAlocado.hora,
+                        'Usuário Com Recurso Alocado': recursoAlocado.usuario,
+                        
+                        'Data Finalizado': finalizado.data,
+                        'Hora Finalizado': finalizado.hora,
+                        'Usuário Finalizado': finalizado.usuario,
+                        
+                        // Colunas originais mantidas para compatibilidade
+                        'Data de Acionamento': formatarData(acionamento.data_acionamento) || '',
+                        'Data de Envio': formatarData(acionamento.data_envio) || '',
+                        'Data de Alocação da Turma': formatarData(acionamento.data_alocacao_turma) || '',
+                        'Data de Finalização da Ocorrência': formatarData(acionamento.data_finalizacao) || '',
+                        'Tempo desde Criação': calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, acionamento.data_finalizacao, acionamento.hora_finalizacao),
+                        'Tempo desde Acionamento': calcularTempoDecorrido(acionamento.data_acionamento, null, acionamento.data_finalizacao, acionamento.hora_finalizacao),
+                        'Validado por': acionamento.validado_por || '',
+                        'Alocado por': acionamento.alocado_por || '',
+                        'Finalizado por': acionamento.finalizado_por || ''
+                    };
+                });
                 
                 // Criar workbook
                 const ws = XLSX.utils.json_to_sheet(exportData);
