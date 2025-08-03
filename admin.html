@@ -993,6 +993,7 @@
                                             <th>Número</th>
                                             <th>Equipe</th>
                                             <th>Tipo Defeito</th>
+                                            <th>Alimentador</th>
                                             <th>Referência</th>
                                             <th>Clientes Interrompidos</th>
                                             <th>Tempo desde Criação</th>
@@ -1078,6 +1079,11 @@
                                 <option value="VAO_REDE">VÃO DE REDE</option>
                                 <option value="PODA">PODA</option>
                             </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="editAlimentador">Alimentador</label>
+                            <input type="text" id="editAlimentador" class="form-control">
                         </div>
                         
                         <div class="form-group">
@@ -1475,14 +1481,17 @@
                 const row = document.createElement('tr');
                 
                 // Calcular tempos
-                const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia);
-                const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao);
+                const dataFim = acionamento.status === 'FINALIZADO' ? acionamento.data_finalizacao : null;
+                const horaFim = acionamento.status === 'FINALIZADO' ? acionamento.hora_finalizacao : null;
+                const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, dataFim, horaFim);
+                const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao, null, dataFim, horaFim);
                 
                 // Criar células individualmente para garantir que o botão seja renderizado
                 const cells = [
                     acionamento.numero_ocorrencia || acionamento.id,
                     acionamento.equipe || '-',
                     acionamento.tipo_defeito || '-',
+                    acionamento.alimentador || '-',
                     `${acionamento.tipo_referencia || ''} ${acionamento.numero_referencia || ''}`.trim(),
                     acionamento.clientes_interrompidos || '-',
                     tempoDesdeCreacao,
@@ -1519,22 +1528,30 @@
         }
 
         // Função para calcular tempo decorrido
-        function calcularTempoDecorrido(dataInicio, horaInicio = null) {
+        function calcularTempoDecorrido(dataInicio, horaInicio = null, dataFim = null, horaFim = null) {
             if (!dataInicio) return '-';
             
             let inicio;
             if (horaInicio) {
-                // Se temos data e hora separadas (do formulário)
                 inicio = new Date(`${dataInicio}T${horaInicio}`);
             } else {
-                // Se temos timestamp ISO (do sistema)
                 inicio = new Date(dataInicio);
             }
             
             if (isNaN(inicio.getTime())) return '-';
             
-            const agora = new Date();
-            const diffMs = agora - inicio;
+            let fim;
+            if (dataFim) {
+                if (horaFim) {
+                    fim = new Date(`${dataFim}T${horaFim}`);
+                } else {
+                    fim = new Date(dataFim);
+                }
+            } else {
+                fim = new Date(); // Usa a data/hora atual se não houver data de fim
+            }
+
+            const diffMs = fim - inicio;
             
             if (diffMs < 0) return '-';
             
@@ -1554,8 +1571,10 @@
             rows.forEach((row, index) => {
                 if (index < acionamentos.length) {
                     const acionamento = acionamentos[index];
-                    const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia);
-                    const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao);
+                    const dataFim = acionamento.status === 'FINALIZADO' ? acionamento.data_finalizacao : null;
+                    const horaFim = acionamento.status === 'FINALIZADO' ? acionamento.hora_finalizacao : null;
+                    const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, dataFim, horaFim);
+                    const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao, null, dataFim, horaFim);
                     
                     const cells = row.querySelectorAll('.time-column');
                     if (cells.length >= 2) {
@@ -1612,7 +1631,8 @@
             document.getElementById('editHorarioCriacao').value = acionamento.horario_criacao_ocorrencia || '';
             document.getElementById('editEquipe').value = acionamento.equipe || '';
             document.getElementById('editTipoEquipe').value = acionamento.tipo_equipe || '';
-            document.getElementById('editTipoDefeito').value = acionamento.tipo_defeito || '';
+            document.getElementById("editTipoDefeito").value = acionamento.tipo_defeito || '';
+            document.getElementById("editAlimentador").value = acionamento.alimentador || '';
             document.getElementById('editTipoReferencia').value = acionamento.tipo_referencia || '';
             document.getElementById('editNumeroReferencia').value = acionamento.numero_referencia || '';
             document.getElementById('editClientesInterrompidos').value = acionamento.clientes_interrompidos || '';
@@ -1641,7 +1661,7 @@
             const isFinalizado = status === 'FINALIZADO';
             
             // Campos editáveis baseado no status e permissões
-            const campos = ['editDataCriacao', 'editHorarioCriacao', 'editEquipe', 'editTipoEquipe', 'editTipoDefeito', 'editTipoReferencia', 'editNumeroReferencia', 'editMateriais'];
+            const campos = ['editDataCriacao', 'editHorarioCriacao', 'editEquipe', 'editTipoEquipe', 'editTipoDefeito', 'editAlimentador', 'editTipoReferencia', 'editNumeroReferencia', 'editMateriais'];
             
             campos.forEach(campo => {
                 const element = document.getElementById(campo);
@@ -1713,6 +1733,7 @@
                     equipe: document.getElementById('editEquipe').value,
                     tipo_equipe: document.getElementById('editTipoEquipe').value,
                     tipo_defeito: document.getElementById('editTipoDefeito').value,
+                    alimentador: document.getElementById('editAlimentador').value,
                     tipo_referencia: document.getElementById('editTipoReferencia').value,
                     numero_referencia: document.getElementById('editNumeroReferencia').value,
                     clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
@@ -1997,17 +2018,26 @@
 
         // Função para obter dados de tempo médio
         function getTempoMedioData() {
-            let filteredData = acionamentos;
+            let filteredData = acionamentos.filter(a => a.data_acionamento && a.data_alocacao_turma);
             
             if (currentFilter !== 'TODOS') {
-                filteredData = acionamentos.filter(a => a.status === currentFilter);
+                filteredData = filteredData.filter(a => a.status === currentFilter);
             }
             
-            // Calcular tempo médio por mês (dados simulados baseados nos acionamentos)
-            const baseData = [4, 3.5, 5, 4.5, 3.8, 4.2];
-            const factor = filteredData.length / Math.max(acionamentos.length, 1);
+            if (filteredData.length === 0) return [0];
+
+            let totalDuration = 0;
+            filteredData.forEach(acionamento => {
+                const inicio = new Date(acionamento.data_acionamento);
+                const fim = new Date(acionamento.data_alocacao_turma);
+                const diffMs = fim - inicio;
+                totalDuration += diffMs;
+            });
+
+            const averageMs = totalDuration / filteredData.length;
+            const averageHours = averageMs / (1000 * 60 * 60);
             
-            return baseData.map(value => Math.round(value * factor * 10) / 10);
+            return [parseFloat(averageHours.toFixed(2))];
         }
 
         // Função para obter dados de tempo por status
@@ -2072,14 +2102,19 @@
                     'Equipe': acionamento.equipe || '',
                     'Tipo de Equipe': acionamento.tipo_equipe || '',
                     'Tipo de Defeito': acionamento.tipo_defeito || '',
+                    'Alimentador': acionamento.alimentador || '',
                     'Tipo de Referência': acionamento.tipo_referencia || '',
                     'Número da Referência': acionamento.numero_referencia || '',
                     'Clientes Interrompidos': acionamento.clientes_interrompidos || '',
                     'Relatório da Ocorrência': acionamento.relatorio_ocorrencia || '',
                     'Materiais Necessários': acionamento.materiais_necessarios || '',
                     'Status': getStatusLabel(acionamento.status),
-                    'Tempo desde Criação': calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia),
-                    'Tempo desde Acionamento': calcularTempoDecorrido(acionamento.data_criacao),
+                    'Data de Acionamento': formatarData(acionamento.data_acionamento) || '',
+                    'Data de Envio': formatarData(acionamento.data_envio) || '',
+                    'Data de Alocação da Turma': formatarData(acionamento.data_alocacao_turma) || '',
+                    'Data de Finalização da Ocorrência': formatarData(acionamento.data_finalizacao) || '',
+                    'Tempo desde Criação': calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, acionamento.data_finalizacao, acionamento.hora_finalizacao),
+                    'Tempo desde Acionamento': calcularTempoDecorrido(acionamento.data_acionamento, null, acionamento.data_finalizacao, acionamento.hora_finalizacao),
                     'Validado por': acionamento.validado_por || '',
                     'Alocado por': acionamento.alocado_por || '',
                     'Finalizado por': acionamento.finalizado_por || ''

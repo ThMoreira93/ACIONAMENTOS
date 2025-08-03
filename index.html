@@ -701,6 +701,8 @@ window.enviarAcionamento = async function(event) {
     const relatorioOcorrencia = document.getElementById('relatorioOcorrencia').value;
     const materiaisNecessarios = document.getElementById('materiaisNecessarios').value;
     
+    const alimentador = document.getElementById('alimentador').value;
+
     // Validações
     if (!validarNumeroOcorrencia(numeroOcorrencia)) {
       throw new Error('Formato do número da ocorrência inválido. Use o formato: ANO_MÊS_NÚMERO (ex: 2025_08_000001)');
@@ -720,6 +722,7 @@ window.enviarAcionamento = async function(event) {
       tipo_defeito: tipoDefeito,
       tipo_referencia: tipoReferencia,
       numero_referencia: numeroReferencia,
+      alimentador,
       relatorio_ocorrencia: relatorioOcorrencia,
       materiais_necessarios: materiaisNecessarios
     };
