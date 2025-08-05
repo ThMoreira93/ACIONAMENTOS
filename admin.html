@@ -10,126 +10,6 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-    
-    <!-- Firebase v9 SDK -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
-        import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
-
-        // Configuração do Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyCv7vfGMSobE1n0M1CECl46LdMy3pdrxh4",
-            authDomain: "pedido-de-material---ilheus.firebaseapp.com",
-            projectId: "pedido-de-material---ilheus",
-            storageBucket: "pedido-de-material---ilheus.appspot.com",
-            messagingSenderId: "155845988594",
-            appId: "1:155845988594:web:322f34f9790f605a92006b"
-        };
-
-        // Inicializar Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // Variáveis globais para Firebase
-        window.firebaseAuth = auth;
-        window.firebaseDB = db;
-        window.currentUser = null;
-        window.userLevel = null;
-
-        // Função de login Firebase
-        window.loginWithFirebase = async function(email, password) {
-            try {
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-                
-                // Verificar se o usuário existe nas coleções
-                const userInfo = await checkUserInCollections(user.uid);
-                
-                if (userInfo) {
-                    window.currentUser = userInfo;
-                    window.userLevel = userInfo.level;
-                    return userInfo;
-                } else {
-                    await signOut(auth);
-                    throw new Error('Usuário não autorizado para este sistema');
-                }
-            } catch (error) {
-                throw error;
-            }
-        };
-
-        // Verificar usuário nas coleções
-        async function checkUserInCollections(uid) {
-            try {
-                // Verificar na coleção usuarioclb (ADMIN1)
-                const clbDoc = await getDoc(doc(db, 'usuarioclb', uid));
-                if (clbDoc.exists()) {
-                    const userData = clbDoc.data();
-                    return {
-                        uid: uid,
-                        level: 'ADMIN1',
-                        code: userData.codigo || 'CLB000000',
-                        name: userData.nome || 'Administrador CLB',
-                        email: userData.email || '',
-                        collection: 'usuarioclb',
-                        role: 'admin1'
-                    };
-                }
-
-                // Verificar na coleção usuarioEPS (ADMIN2)
-                const epsDoc = await getDoc(doc(db, 'usuarioEPS', uid));
-                if (epsDoc.exists()) {
-                    const userData = epsDoc.data();
-                    return {
-                        uid: uid,
-                        level: 'ADMIN2',
-                        code: userData.codigo || 'EPS000000',
-                        name: userData.nome || 'Administrador EPS',
-                        email: userData.email || '',
-                        collection: 'usuarioEPS',
-                        role: 'admin2'
-                    };
-                }
-
-                return null;
-            } catch (error) {
-                console.error('Erro ao verificar usuário nas coleções:', error);
-                return null;
-            }
-        }
-
-        // Função de logout Firebase
-        window.logoutFirebase = async function() {
-            try {
-                await signOut(auth);
-                window.currentUser = null;
-                window.userLevel = null;
-            } catch (error) {
-                console.error('Erro no logout:', error);
-            }
-        };
-
-        // Monitorar estado de autenticação
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                const userInfo = await checkUserInCollections(user.uid);
-                if (userInfo) {
-                    window.currentUser = userInfo;
-                    window.userLevel = userInfo.level;
-                    // Atualizar interface se necessário
-                    if (typeof updateUserInterface === 'function') {
-                        updateUserInterface(userInfo);
-                    }
-                } else {
-                    await signOut(auth);
-                }
-            }
-        });
-    </script>
-    
-    <!-- Firebase v8 para compatibilidade com o código existente -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     
@@ -292,11 +172,6 @@
 
         .btn-primary:hover {
             background: var(--primary-700);
-        }
-
-        .btn-primary:disabled {
-            background: var(--neutral-400);
-            cursor: not-allowed;
         }
 
         .btn-secondary {
@@ -914,10 +789,10 @@
             
             <form id="loginForm">
                 <div class="form-group">
-                    <label class="form-label" for="email">
-                        <i class="fas fa-envelope"></i> E-mail
+                    <label class="form-label" for="username">
+                        <i class="fas fa-user"></i> Usuário
                     </label>
-                    <input type="email" id="email" class="form-control" placeholder="Digite seu e-mail" required>
+                    <input type="text" id="username" class="form-control" placeholder="Digite seu usuário" required>
                 </div>
                 
                 <div class="form-group">
@@ -928,10 +803,10 @@
                 </div>
                 
                 <div id="loginError" class="alert alert-danger d-none">
-                    E-mail ou senha incorretos.
+                    Usuário ou senha incorretos.
                 </div>
                 
-                <button type="submit" class="btn btn-primary" id="loginBtn">
+                <button type="submit" class="btn btn-primary">
                     <i class="fas fa-sign-in-alt"></i> Entrar
                 </button>
             </form>
@@ -1264,7 +1139,7 @@
     </div>
 
     <script>
-        // Configuração do Firebase v8 (mantendo compatibilidade com código existente)
+        // Configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyCv7vfGMSobE1n0M1CECl46LdMy3pdrxh4",
             authDomain: "pedido-de-material---ilheus.firebaseapp.com",
@@ -1274,7 +1149,7 @@
             appId: "1:155845988594:web:322f34f9790f605a92006b"
         };
 
-        // Inicializar Firebase v8
+        // Inicializar Firebase
         let db = null;
         let firebaseInitialized = false;
 
@@ -1302,150 +1177,11 @@
 
         const SESSION_DURATION = 30 * 60 * 1000; // 30 minutos
 
-        // Função de login modificada para usar Firebase
-        async function handleLogin(event) {
-            event.preventDefault();
-            
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            const loginBtn = document.getElementById('loginBtn');
-            const loginError = document.getElementById('loginError');
-            
-            // Validações básicas
-            if (!email || !password) {
-                showLoginError('Por favor, preencha todos os campos.');
-                return;
-            }
-
-            if (!email.includes('@')) {
-                showLoginError('Por favor, digite um e-mail válido.');
-                return;
-            }
-            
-            // Desabilitar botão e mostrar loading
-            loginBtn.disabled = true;
-            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
-            hideLoginError();
-            
-            try {
-                // Usar a função Firebase do módulo ES6
-                const userInfo = await window.loginWithFirebase(email, password);
-                
-                if (userInfo) {
-                    // Configurar usuário atual
-                    currentUser = userInfo;
-                    
-                    // Atualizar interface
-                    updateUserInterface(userInfo);
-                    
-                    // Mostrar aplicação principal
-                    document.getElementById('loginScreen').classList.add('d-none');
-                    document.getElementById('mainApp').classList.remove('d-none');
-                    
-                    // Carregar dados
-                    setTimeout(() => {
-                        loadAcionamentos();
-                    }, 500);
-                    
-                    // Configurar timeout de sessão
-                    resetSessionTimeout();
-                } else {
-                    throw new Error('Falha no processo de login');
-                }
-                
-            } catch (error) {
-                console.error('Erro no login:', error);
-                
-                // Traduzir erros comuns do Firebase
-                let errorMessage = 'Erro ao fazer login. Tente novamente.';
-                
-                if (error.code === 'auth/user-not-found') {
-                    errorMessage = 'Usuário não encontrado. Verifique o e-mail digitado.';
-                } else if (error.code === 'auth/wrong-password') {
-                    errorMessage = 'Senha incorreta. Tente novamente.';
-                } else if (error.code === 'auth/invalid-email') {
-                    errorMessage = 'E-mail inválido. Verifique o formato do e-mail.';
-                } else if (error.code === 'auth/too-many-requests') {
-                    errorMessage = 'Muitas tentativas de login. Tente novamente em alguns minutos.';
-                } else if (error.code === 'auth/network-request-failed') {
-                    errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
-                } else if (error.message) {
-                    errorMessage = error.message;
-                }
-                
-                showLoginError(errorMessage);
-            } finally {
-                // Reabilitar botão
-                loginBtn.disabled = false;
-                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
-            }
-        }
-
-        // Função para atualizar interface do usuário
-        function updateUserInterface(userInfo) {
-            const roleText = userInfo.level === 'ADMIN1' ? 'Administrador CLB' : 'Administrador EPS';
-            document.getElementById('userRole').textContent = roleText;
-            document.getElementById('userCode').textContent = userInfo.code;
-        }
-
-        // Funções auxiliares para login
-        function showLoginError(message) {
-            const loginError = document.getElementById('loginError');
-            loginError.textContent = message;
-            loginError.classList.remove('d-none');
-        }
-
-        function hideLoginError() {
-            const loginError = document.getElementById('loginError');
-            loginError.classList.add('d-none');
-        }
-
-        // Função de logout modificada para usar Firebase
-        async function logout() {
-            try {
-                await window.logoutFirebase();
-                currentUser = null;
-                clearSessionTimeout();
-                
-                // Mostrar tela de login
-                document.getElementById('loginScreen').classList.remove('d-none');
-                document.getElementById('mainApp').classList.add('d-none');
-                
-                // Limpar formulário
-                document.getElementById('email').value = '';
-                document.getElementById('password').value = '';
-                hideLoginError();
-                
-            } catch (error) {
-                console.error('Erro no logout:', error);
-                // Forçar logout local se houver erro
-                currentUser = null;
-                clearSessionTimeout();
-                document.getElementById('loginScreen').classList.remove('d-none');
-                document.getElementById('mainApp').classList.add('d-none');
-            }
-        }
-
-        // Função para verificar sessão (removida pois agora usa Firebase Auth)
-        function checkSession() {
-            return false; // Sempre retorna false para forçar login via Firebase
-        }
-
-        // Funções de timeout de sessão
-        function resetSessionTimeout() {
-            clearSessionTimeout();
-            sessionTimeout = setTimeout(() => {
-                alert('Sua sessão expirou. Você será redirecionado para a tela de login.');
-                logout();
-            }, SESSION_DURATION);
-        }
-
-        function clearSessionTimeout() {
-            if (sessionTimeout) {
-                clearTimeout(sessionTimeout);
-                sessionTimeout = null;
-            }
-        }
+        // Credenciais de usuários
+        const users = {
+            'CLB354374': { password: '*2025*Coelba', role: 'admin1', name: 'THIAGO MOREIRA' },
+            'EPS354374': { password: 'TESTE', role: 'admin2', name: 'COLABORADOR EPS' }	
+        };
 
         // Inicializar aplicação
         document.addEventListener('DOMContentLoaded', () => {
@@ -1454,71 +1190,419 @@
             
             initializeFirebase();
             
-            // Configurar formulário de login
-            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            // Verificar sessão existente
+            if (!checkSession()) {
+                // Configurar formulário de login
+                document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            } else {
+                // Se já está logado, carregar dados
+                setTimeout(() => {
+                    loadAcionamentos();
+                }, 1000);
+            }
             
-            // Configurar outros event listeners...
-            setupEventListeners();
-        });
-
-        // Configurar event listeners
-        function setupEventListeners() {
-            // Event listeners para menu
+            // Configurar menu
             document.querySelectorAll('.menu-item[data-section]').forEach(item => {
-                item.addEventListener('click', function() {
-                    const section = this.getAttribute('data-section');
-                    switchSection(section);
+                item.addEventListener('click', () => {
+                    const section = item.getAttribute('data-section');
+                    showSection(section);
                 });
             });
+            
+            // Configurar overlay do sidebar
+            document.getElementById('sidebarOverlay').addEventListener('click', closeSidebar);
+            
+            // Atualizar colunas de tempo a cada minuto
+            setInterval(updateTimeColumns, 60000);
+        });
 
-            // Event listener para overlay do sidebar
-            document.getElementById('sidebarOverlay').addEventListener('click', function() {
-                toggleSidebar();
-            });
+        // Função de login
+        function handleLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            if (users[username] && users[username].password === password) {
+                currentUser = {
+                    username: username,
+                    role: users[username].role,
+                    name: users[username].name
+                };
+                
+                // Salvar sessão
+                const sessionData = {
+                    user: currentUser,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('clb_session', JSON.stringify(sessionData));
+                
+                // Atualizar interface
+                document.getElementById('userRole').textContent = currentUser.name;
+                document.getElementById('userCode').textContent = currentUser.username;
+                
+                // Configurar permissões do menu
+                setupMenuPermissions();
+                
+                // Mostrar aplicação
+                document.getElementById('loginScreen').classList.add('d-none');
+                document.getElementById('mainApp').classList.remove('d-none');
+                
+                // Configurar timeout de sessão
+                resetSessionTimeout();
+                
+                // Redirecionar ADMIN2 para acionamentos enviados
+                if (currentUser.role === 'admin2') {
+                    showSection('acionamentos_enviados');
+                } else {
+                    showSection('dashboard');
+                }
+                
+                errorDiv.classList.add('d-none');
+            } else {
+                errorDiv.classList.remove('d-none');
+            }
+        }
 
-            // Event listener para modal
-            document.getElementById('editModal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeEditModal();
+        // Função para configurar permissões do menu
+        function setupMenuPermissions() {
+            const menuItems = document.querySelectorAll('.menu-item');
+            
+            menuItems.forEach(item => {
+                const section = item.getAttribute('data-section');
+                
+                if (currentUser.role === 'admin2') {
+                    // ADMIN2 não pode acessar acionamentos pendentes e todas as ocorrências
+                    if (section === 'acionamentos_pendentes' || section === 'todas_ocorrencias') {
+                        item.style.display = 'none';
+                    }
                 }
             });
         }
 
-        // Resto do código JavaScript original permanece inalterado...
-        // [Aqui continuaria todo o código JavaScript original do arquivo, mantendo todas as funções existentes]
-        
-        // Função para carregar acionamentos (simulação)
-        function loadAcionamentos() {
-            // Simular dados para demonstração
-            acionamentos = [
-                {
-                    id: '1',
-                    numero_ocorrencia: 'AC001',
-                    equipe: 'EQUIPE_01',
-                    tipo_defeito: 'CABO_ROMPIDO',
-                    alimentador: 'ALM001',
-                    numero_referencia: 'Rua A, 123',
-                    clientes_interrompidos: 150,
-                    data_criacao_ocorrencia: '2024-01-15',
-                    horario_criacao_ocorrencia: '08:30',
-                    status: 'PENDENTE'
-                },
-                {
-                    id: '2',
-                    numero_ocorrencia: 'AC002',
-                    equipe: 'EQUIPE_02',
-                    tipo_defeito: 'TRANSFORMADOR_QUEIMADO',
-                    alimentador: 'ALM002',
-                    numero_referencia: 'Rua B, 456',
-                    clientes_interrompidos: 300,
-                    data_criacao_ocorrencia: '2024-01-15',
-                    horario_criacao_ocorrencia: '10:15',
-                    status: 'ENVIADO'
-                }
-            ];
+        // Função para verificar sessão
+        function checkSession() {
+            const sessionData = localStorage.getItem('clb_session');
             
-            updateCounters();
-            renderTable(acionamentos);
+            if (sessionData) {
+                const session = JSON.parse(sessionData);
+                const now = Date.now();
+                
+                // Verificar se a sessão não expirou
+                if (now - session.timestamp < SESSION_DURATION) {
+                    currentUser = session.user;
+                    
+                    // Atualizar interface
+                    document.getElementById('userRole').textContent = currentUser.name;
+                    document.getElementById('userCode').textContent = currentUser.username;
+                    
+                    // Configurar permissões do menu
+                    setupMenuPermissions();
+                    
+                    // Mostrar aplicação
+                    document.getElementById('loginScreen').classList.add('d-none');
+                    document.getElementById('mainApp').classList.remove('d-none');
+                    
+                    // Configurar timeout de sessão
+                    resetSessionTimeout();
+                    
+                    return true;
+                }
+            }
+            
+            // Limpar sessão expirada
+            localStorage.removeItem('clb_session');
+            return false;
+        }
+
+        // Função para resetar timeout de sessão
+        function resetSessionTimeout() {
+            if (sessionTimeout) {
+                clearTimeout(sessionTimeout);
+            }
+            
+            sessionTimeout = setTimeout(() => {
+                logout();
+                alert('Sua sessão expirou. Faça login novamente.');
+            }, SESSION_DURATION);
+        }
+
+        // Função de logout
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('clb_session');
+            
+            if (sessionTimeout) {
+                clearTimeout(sessionTimeout);
+            }
+            
+            document.getElementById('loginScreen').classList.remove('d-none');
+            document.getElementById('mainApp').classList.add('d-none');
+            
+            // Limpar formulário
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('loginError').classList.add('d-none');
+        }
+
+        // Função para mostrar seção
+        function showSection(section) {
+            // Resetar timeout de sessão em qualquer atividade
+            resetSessionTimeout();
+            
+            // Verificar permissões
+            if (currentUser.role === 'admin2') {
+                if (section === 'acionamentos_pendentes' || section === 'todas_ocorrencias') {
+                    return; // Silenciosamente não fazer nada
+                }
+            }
+            
+            currentStatus = section.toUpperCase();
+            
+            // Atualizar menu ativo
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const activeItem = document.querySelector(`[data-section="${section}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
+            
+            // Mostrar/ocultar seções
+            if (section === 'dashboard') {
+                document.getElementById('dashboardSection').classList.remove('d-none');
+                document.getElementById('acionamentosSection').classList.add('d-none');
+                document.getElementById('pageTitle').textContent = 'Dashboard';
+                loadDashboard();
+            } else {
+                document.getElementById('dashboardSection').classList.add('d-none');
+                document.getElementById('acionamentosSection').classList.remove('d-none');
+                
+                // Atualizar títulos
+                const titles = {
+                    'acionamentos_pendentes': { title: 'Acionamentos Pendentes', subtitle: 'Gerencie os acionamentos que aguardam validação' },
+                    'acionamentos_enviados': { title: 'Acionamentos Enviados', subtitle: 'Acionamentos enviados para a EPS' },
+                    'com_recurso_alocado': { title: 'Com Recurso Alocado', subtitle: 'Acionamentos com equipe alocada' },
+                    'ocorrencias_finalizadas': { title: 'Ocorrências Finalizadas', subtitle: 'Acionamentos finalizados' },
+                    'todas_ocorrencias': { title: 'Todas as Ocorrências', subtitle: 'Visualização completa de todos os acionamentos' }
+                };
+                
+                const sectionInfo = titles[section];
+                if (sectionInfo) {
+                    document.getElementById('pageTitle').textContent = sectionInfo.title;
+                    document.getElementById('sectionTitle').textContent = sectionInfo.title;
+                    document.getElementById('sectionSubtitle').textContent = sectionInfo.subtitle;
+                    document.getElementById('cardTitle').textContent = sectionInfo.title;
+                }
+                
+                loadAcionamentos();
+            }
+        }
+
+        // Função para carregar acionamentos
+        async function loadAcionamentos() {
+            if (!firebaseInitialized) {
+                console.log('Firebase não inicializado');
+                return;
+            }
+            
+            try {
+                document.getElementById('loadingState').classList.remove('d-none');
+                document.getElementById('emptyState').classList.add('d-none');
+                document.getElementById('tableContainer').classList.add('d-none');
+                
+                const snapshot = await db.collection('acionamentos').get();
+                acionamentos = [];
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    acionamentos.push({
+                        id: doc.id,
+                        ...data
+                    });
+                });
+                
+                // Filtrar por status
+                let filteredAcionamentos = acionamentos;
+                if (currentStatus !== 'TODAS_OCORRENCIAS') {
+                    const statusMap = {
+                        'ACIONAMENTOS_PENDENTES': 'PENDENTE',
+                        'ACIONAMENTOS_ENVIADOS': 'ENVIADO',
+                        'COM_RECURSO_ALOCADO': 'RECURSO_ALOCADO',
+                        'OCORRENCIAS_FINALIZADAS': 'FINALIZADO'
+                    };
+                    filteredAcionamentos = acionamentos.filter(a => a.status === statusMap[currentStatus]);
+                } else {
+                    // Para ADMIN2, filtrar acionamentos pendentes em "todas as ocorrências"
+                    if (currentUser.role === 'admin2') {
+                        filteredAcionamentos = acionamentos.filter(a => a.status !== 'PENDENTE');
+                    }
+                }
+                
+                document.getElementById('loadingState').classList.add('d-none');
+                
+                if (filteredAcionamentos.length === 0) {
+                    document.getElementById('emptyState').classList.remove('d-none');
+                } else {
+                    document.getElementById('tableContainer').classList.remove('d-none');
+                    renderAcionamentosTable(filteredAcionamentos);
+                }
+                
+                // Atualizar contador
+                document.getElementById('cardCount').textContent = `${filteredAcionamentos.length} acionamentos`;
+                
+                // Atualizar contadores do menu
+                updateCounters();
+                
+            } catch (error) {
+                console.error('Erro ao carregar acionamentos:', error);
+                document.getElementById('loadingState').classList.add('d-none');
+                document.getElementById('emptyState').classList.remove('d-none');
+            }
+        }
+
+        // Função para renderizar tabela de acionamentos
+        function renderAcionamentosTable(data) {
+            const tbody = document.getElementById('acionamentosTableBody');
+            if (!tbody) {
+                console.error('Elemento acionamentosTableBody não encontrado');
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;">Nenhum acionamento encontrado</td></tr>';
+                return;
+            }
+            
+            data.forEach(acionamento => {
+                const row = document.createElement('tr');
+                
+                // Calcular tempos
+                const dataFim = acionamento.status === 'FINALIZADO' ? acionamento.data_finalizacao : null;
+                const horaFim = acionamento.status === 'FINALIZADO' ? acionamento.hora_finalizacao : null;
+                const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, dataFim, horaFim);
+                const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao, null, dataFim, horaFim);
+                
+                // Criar células individualmente para garantir que o botão seja renderizado
+                const cells = [
+                    acionamento.numero_ocorrencia || acionamento.id,
+                    acionamento.equipe || '-',
+                    acionamento.tipo_defeito || '-',
+                    acionamento.alimentador || '-',
+                    `${acionamento.tipo_referencia || ''} ${acionamento.numero_referencia || ''}`.trim(),
+                    acionamento.clientes_interrompidos || '-',
+                    tempoDesdeCreacao,
+                    tempoDesdeAcionamento,
+                    `<span class="status-badge status-${acionamento.status?.toLowerCase() || 'pendente'}">${getStatusLabel(acionamento.status)}</span>`,
+                    formatarData(acionamento.data_criacao_ocorrencia)
+                ];
+                
+                // Adicionar células de dados
+                cells.forEach((cellContent, index) => {
+                    const td = document.createElement('td');
+                    if (index === 5 || index === 6) { // Colunas de tempo
+                        td.className = 'time-column';
+                    }
+                    td.innerHTML = cellContent;
+                    row.appendChild(td);
+                });
+                
+                // Adicionar célula de ações
+                const actionTd = document.createElement('td');
+                const editButton = document.createElement('button');
+                editButton.className = 'btn btn-primary btn-sm';
+                editButton.innerHTML = '<i class="fas fa-edit"></i>';
+                editButton.onclick = function() {
+                    editAcionamento(acionamento.id);
+                };
+                actionTd.appendChild(editButton);
+                row.appendChild(actionTd);
+                
+                tbody.appendChild(row);
+            });
+            
+            console.log(`Tabela renderizada com ${data.length} acionamentos`);
+        }
+
+        // Função para calcular tempo decorrido
+        function calcularTempoDecorrido(dataInicio, horaInicio = null, dataFim = null, horaFim = null) {
+            if (!dataInicio) return '-';
+            
+            let inicio;
+            if (horaInicio) {
+                inicio = new Date(`${dataInicio}T${horaInicio}`);
+            } else {
+                inicio = new Date(dataInicio);
+            }
+            
+            if (isNaN(inicio.getTime())) return '-';
+            
+            let fim;
+            if (dataFim) {
+                if (horaFim) {
+                    fim = new Date(`${dataFim}T${horaFim}`);
+                } else {
+                    fim = new Date(dataFim);
+                }
+            } else {
+                fim = new Date(); // Usa a data/hora atual se não houver data de fim
+            }
+
+            const diffMs = fim - inicio;
+            
+            if (diffMs < 0) return '-';
+            
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (diffHours > 0) {
+                return `${diffHours}h ${diffMinutes}m`;
+            } else {
+                return `${diffMinutes}m`;
+            }
+        }
+
+        // Função para atualizar colunas de tempo
+        function updateTimeColumns() {
+            const rows = document.querySelectorAll('#acionamentosTableBody tr');
+            rows.forEach((row, index) => {
+                if (index < acionamentos.length) {
+                    const acionamento = acionamentos[index];
+                    const dataFim = acionamento.status === 'FINALIZADO' ? acionamento.data_finalizacao : null;
+                    const horaFim = acionamento.status === 'FINALIZADO' ? acionamento.hora_finalizacao : null;
+                    const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, dataFim, horaFim);
+                    const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao, null, dataFim, horaFim);
+                    
+                    const cells = row.querySelectorAll('.time-column');
+                    if (cells.length >= 2) {
+                        cells[0].textContent = tempoDesdeCreacao;
+                        cells[1].textContent = tempoDesdeAcionamento;
+                    }
+                }
+            });
+        }
+
+        // Função para formatar data
+        function formatarData(data) {
+            if (!data) return '-';
+            if (data.includes('T')) {
+                return new Date(data).toLocaleDateString('pt-BR');
+            }
+            return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+        }
+
+        // Função para obter label do status
+        function getStatusLabel(status) {
+            const labels = {
+                'PENDENTE': 'Pendente',
+                'ENVIADO': 'Enviado',
+                'RECURSO_ALOCADO': 'Com Recurso',
+                'FINALIZADO': 'Finalizado'
+            };
+            return labels[status] || 'Pendente';
         }
 
         // Função para atualizar contadores
@@ -1535,72 +1619,93 @@
             document.getElementById('todasCount').textContent = acionamentos.length;
         }
 
-        // Função para renderizar tabela
-        function renderTable(data) {
-            const tbody = document.getElementById('acionamentosTableBody');
-            const loadingState = document.getElementById('loadingState');
-            const emptyState = document.getElementById('emptyState');
-            const tableContainer = document.getElementById('tableContainer');
-            
-            // Ocultar loading
-            loadingState.classList.add('d-none');
-            
-            if (data.length === 0) {
-                emptyState.classList.remove('d-none');
-                tableContainer.classList.add('d-none');
-                return;
-            }
-            
-            emptyState.classList.add('d-none');
-            tableContainer.classList.remove('d-none');
-            
-            // Limpar tabela
-            tbody.innerHTML = '';
-            
-            // Adicionar linhas
-            data.forEach(acionamento => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${acionamento.numero_ocorrencia || acionamento.id}</td>
-                    <td>${acionamento.equipe || '-'}</td>
-                    <td>${acionamento.tipo_defeito || '-'}</td>
-                    <td>${acionamento.alimentador || '-'}</td>
-                    <td>${acionamento.numero_referencia || '-'}</td>
-                    <td>${acionamento.clientes_interrompidos || '-'}</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td><span class="status-badge status-${acionamento.status.toLowerCase()}">${getStatusLabel(acionamento.status)}</span></td>
-                    <td>${acionamento.data_criacao_ocorrencia || '-'}</td>
-                    <td>
-                        <button class="btn btn-primary btn-sm" onclick="editAcionamento('${acionamento.id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        // Função para obter label do status
-        function getStatusLabel(status) {
-            const labels = {
-                'PENDENTE': 'Pendente',
-                'ENVIADO': 'Enviado',
-                'RECURSO_ALOCADO': 'Com Recurso',
-                'FINALIZADO': 'Finalizado'
-            };
-            return labels[status] || 'Pendente';
-        }
-
-        // Função para alternar seções
-        function switchSection(section) {
-            // Implementação básica
-            console.log('Alternando para seção:', section);
-        }
-
         // Função para editar acionamento
         function editAcionamento(id) {
-            console.log('Editando acionamento:', id);
+            const acionamento = acionamentos.find(a => a.id === id);
+            if (!acionamento) return;
+            
+            // Preencher formulário
+            document.getElementById('editId').value = id;
+            document.getElementById('editNumero').value = acionamento.numero_ocorrencia || acionamento.id;
+            document.getElementById('editDataCriacao').value = acionamento.data_criacao_ocorrencia || '';
+            document.getElementById('editHorarioCriacao').value = acionamento.horario_criacao_ocorrencia || '';
+            document.getElementById('editEquipe').value = acionamento.equipe || '';
+            document.getElementById('editTipoEquipe').value = acionamento.tipo_equipe || '';
+            document.getElementById("editTipoDefeito").value = acionamento.tipo_defeito || '';
+            document.getElementById("editAlimentador").value = acionamento.alimentador || '';
+            document.getElementById('editTipoReferencia').value = acionamento.tipo_referencia || '';
+            document.getElementById('editNumeroReferencia').value = acionamento.numero_referencia || '';
+            document.getElementById('editClientesInterrompidos').value = acionamento.clientes_interrompidos || '';
+            document.getElementById('editRelatorio').value = acionamento.relatorio_ocorrencia || '';
+            document.getElementById('editMateriais').value = acionamento.materiais_necessarios || '';
+
+            // Exibir histórico
+            const historicoContainer = document.getElementById('historicoContainer');
+            historicoContainer.innerHTML = '';
+            if (acionamento.historico && acionamento.historico.length > 0) {
+                acionamento.historico.forEach(entry => {
+                    const p = document.createElement('p');
+                    const date = new Date(entry.data).toLocaleString('pt-BR');
+                    p.innerHTML = `<strong>${date}</strong> - ${entry.usuario}: ${entry.acao}`;
+                    p.style.marginBottom = '0.5rem';
+                    p.style.fontSize = '0.875rem';
+                    historicoContainer.appendChild(p);
+                });
+            } else {
+                historicoContainer.innerHTML = '<p>Nenhum histórico disponível.</p>';
+            }
+            
+            // Configurar permissões de edição
+            const isAdmin1 = currentUser.role === 'admin1';
+            const status = acionamento.status || 'PENDENTE';
+            const isFinalizado = status === 'FINALIZADO';
+            
+            // Campos editáveis baseado no status e permissões
+            const campos = ['editDataCriacao', 'editHorarioCriacao', 'editEquipe', 'editTipoEquipe', 'editTipoDefeito', 'editAlimentador', 'editTipoReferencia', 'editNumeroReferencia', 'editMateriais'];
+            
+            campos.forEach(campo => {
+                const element = document.getElementById(campo);
+                if (status === 'PENDENTE' && isAdmin1) {
+                    element.disabled = false;
+                    element.classList.add('editable-field');
+                } else {
+                    element.disabled = true;
+                    element.classList.remove('editable-field');
+                }
+            });
+            
+            // Campo de clientes interrompidos - editável por admin1 até finalizar
+            const clientesField = document.getElementById('editClientesInterrompidos');
+            if (isAdmin1 && !isFinalizado) {
+                clientesField.disabled = false;
+                clientesField.classList.add('editable-field');
+            } else {
+                clientesField.disabled = true;
+                clientesField.classList.remove('editable-field');
+            }
+            
+            // Campo de relatório - sempre editável até finalizar
+            const relatorioField = document.getElementById('editRelatorio');
+            if (!isFinalizado) {
+                relatorioField.disabled = false;
+                relatorioField.classList.add('editable-field');
+            } else {
+                relatorioField.disabled = true;
+                relatorioField.classList.remove('editable-field');
+            }
+            
+            // Mostrar/ocultar campo de clientes interrompidos baseado no status
+            const clientesGroup = document.getElementById('clientesInterrompidosGroup');
+            clientesGroup.style.display = 'block'; // Sempre mostrar para visualização
+            
+            // Configurar botões de ação
+            document.getElementById('salvarBtn').style.display = (!isFinalizado) ? 'inline-flex' : 'none';
+            document.getElementById('validarBtn').style.display = (status === 'PENDENTE' && isAdmin1) ? 'inline-flex' : 'none';
+            document.getElementById('alocarBtn').style.display = (status === 'ENVIADO') ? 'inline-flex' : 'none';
+            document.getElementById('finalizarBtn').style.display = (status === 'RECURSO_ALOCADO') ? 'inline-flex' : 'none';
+            
+            // Mostrar modal
+            document.getElementById('editModal').classList.add('show');
         }
 
         // Função para fechar modal
@@ -1608,12 +1713,490 @@
             document.getElementById('editModal').classList.remove('show');
         }
 
-        // Função para exportar Excel
-        function exportToExcel() {
-            console.log('Exportando para Excel...');
+        // Função para salvar edição
+        async function salvarEdicao() {
+            try {
+                const id = document.getElementById('editId').value;
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
+
+                const agora = new Date();
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.username,
+                    acao: 'Dados editados',
+                    status_anterior: doc.exists ? doc.data().status : null,
+                    status_novo: doc.exists ? doc.data().status : null
+                };
+
+                const dadosAtualizados = {
+                    data_criacao_ocorrencia: document.getElementById('editDataCriacao').value,
+                    horario_criacao_ocorrencia: document.getElementById('editHorarioCriacao').value,
+                    equipe: document.getElementById('editEquipe').value,
+                    tipo_equipe: document.getElementById('editTipoEquipe').value,
+                    tipo_defeito: document.getElementById('editTipoDefeito').value,
+                    alimentador: document.getElementById('editAlimentador').value,
+                    tipo_referencia: document.getElementById('editTipoReferencia').value,
+                    numero_referencia: document.getElementById('editNumeroReferencia').value,
+                    clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
+                    relatorio_ocorrencia: document.getElementById('editRelatorio').value,
+                    materiais_necessarios: document.getElementById('editMateriais').value,
+                    historico_status: [...historicoAtual, novoHistorico]
+                };
+
+                await acionamentoRef.update(dadosAtualizados);
+                
+                closeEditModal();
+                loadAcionamentos();
+                
+                alert('Acionamento atualizado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao salvar edição:', error);
+                alert('Erro ao salvar alterações.');
+            }
         }
 
-        // Função para toggle do sidebar mobile
+        // Função para validar acionamento
+        async function validarAcionamento() {
+            try {
+                const id = document.getElementById('editId').value;
+                
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
+
+                const agora = new Date();
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.username,
+                    acao: 'Acionamento validado e enviado',
+                    status_anterior: 'PENDENTE',
+                    status_novo: 'ENVIADO'
+                };
+
+                await acionamentoRef.update({
+                    status: 'ENVIADO',
+                    data_validacao: new Date().toISOString(),
+                    validado_por: currentUser.username,
+                    historico_status: [...historicoAtual, novoHistorico]
+                });
+                
+                closeEditModal();
+                loadAcionamentos();
+                
+                alert('Acionamento validado e enviado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao validar acionamento:', error);
+                alert('Erro ao validar acionamento.');
+            }
+        }
+
+        // Função para alocar recurso
+        async function alocarRecurso() {
+            const equipe = prompt('Digite a equipe a ser alocada:');
+            if (!equipe) return;
+            
+            try {
+                const id = document.getElementById('editId').value;
+                
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
+
+                const agora = new Date();
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.username,
+                    acao: `Recurso alocado - Equipe: ${equipe}`,
+                    status_anterior: 'ENVIADO',
+                    status_novo: 'RECURSO_ALOCADO'
+                };
+
+                await acionamentoRef.update({
+                    status: 'RECURSO_ALOCADO',
+                    data_alocacao: new Date().toISOString(),
+                    alocado_por: currentUser.username,
+                    equipe: equipe,
+                    historico_status: [...historicoAtual, novoHistorico]
+                });
+                
+                closeEditModal();
+                loadAcionamentos();
+                
+                alert('Recurso alocado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao alocar recurso:', error);
+                alert('Erro ao alocar recurso.');
+            }
+        }
+
+        // Função para finalizar acionamento
+        async function finalizarAcionamento() {
+            try {
+                const id = document.getElementById('editId').value;
+                
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
+
+                const agora = new Date();
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.username,
+                    acao: 'Acionamento finalizado',
+                    status_anterior: 'RECURSO_ALOCADO',
+                    status_novo: 'FINALIZADO'
+                };
+
+                await acionamentoRef.update({
+                    status: 'FINALIZADO',
+                    data_finalizacao: new Date().toISOString(),
+                    finalizado_por: currentUser.username,
+                    historico_status: [...historicoAtual, novoHistorico]
+                });
+                
+                closeEditModal();
+                loadAcionamentos();
+                
+                alert('Acionamento finalizado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao finalizar:', error);
+                alert('Erro ao finalizar acionamento.');
+            }
+        }
+
+        // Função para carregar dashboard
+        function loadDashboard() {
+            // Atualizar KPIs
+            const pendentes = acionamentos.filter(a => a.status === 'PENDENTE').length;
+            const enviados = acionamentos.filter(a => a.status === 'ENVIADO').length;
+            const recurso = acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length;
+            const finalizados = acionamentos.filter(a => a.status === 'FINALIZADO').length;
+            
+            document.getElementById('kpiPendentes').textContent = pendentes;
+            document.getElementById('kpiEnviados').textContent = enviados;
+            document.getElementById('kpiRecurso').textContent = recurso;
+            document.getElementById('kpiFinalizados').textContent = finalizados;
+            document.getElementById('kpiTodos').textContent = acionamentos.length;
+            
+            // Criar gráficos
+            createCharts();
+        }
+
+        // Função para filtrar por status
+        function filterByStatus(status) {
+            currentFilter = status;
+            
+            // Atualizar KPIs ativos
+            document.querySelectorAll('.kpi-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            document.querySelector(`[data-status="${status}"]`).classList.add('active');
+            
+            // Atualizar gráficos
+            updateCharts();
+        }
+
+        // Função para criar gráficos
+        function createCharts() {
+            // Destruir gráficos existentes
+            Object.values(charts).forEach(chart => {
+                if (chart) chart.destroy();
+            });
+            
+            // Gráfico de tempo médio de atendimento
+            const ctx1 = document.getElementById('tempoAtendimentoChart').getContext('2d');
+            charts.tempoAtendimento = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+                    datasets: [{
+                        label: 'Tempo Médio (horas)',
+                        data: getTempoMedioData(),
+                        backgroundColor: '#fb8c00'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        datalabels: {
+                            display: true,
+                            color: '#000',
+                            font: {
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + 'h';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Gráfico de tempo por status
+            const ctx2 = document.getElementById('tempoStatusChart').getContext('2d');
+            charts.tempoStatus = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pendente', 'Enviado', 'Com Recurso', 'Finalizado'],
+                    datasets: [{
+                        data: getTempoStatusData(),
+                        backgroundColor: ['#fff3cd', '#d1ecf1', '#d4edda', '#f8d7da']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        datalabels: {
+                            display: true,
+                            color: '#000',
+                            font: {
+                                weight: 'bold'
+                            },
+                            formatter: function(value, context) {
+                                return value > 0 ? value : '';
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Gráfico por tipo de equipe
+            const ctx3 = document.getElementById('tipoEquipeChart').getContext('2d');
+            charts.tipoEquipe = new Chart(ctx3, {
+                type: 'pie',
+                data: {
+                    labels: ['Pesada', 'Poda', 'Linha Viva', 'Leve'],
+                    datasets: [{
+                        data: getTipoEquipeData(),
+                        backgroundColor: ['#ff9800', '#4caf50', '#2196f3', '#f44336']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        datalabels: {
+                            display: true,
+                            color: '#fff',
+                            font: {
+                                weight: 'bold'
+                            },
+                            formatter: function(value, context) {
+                                return value > 0 ? value : '';
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Função para atualizar gráficos
+        function updateCharts() {
+            if (charts.tempoAtendimento) {
+                charts.tempoAtendimento.data.datasets[0].data = getTempoMedioData();
+                charts.tempoAtendimento.update();
+            }
+            
+            if (charts.tempoStatus) {
+                charts.tempoStatus.data.datasets[0].data = getTempoStatusData();
+                charts.tempoStatus.update();
+            }
+            
+            if (charts.tipoEquipe) {
+                charts.tipoEquipe.data.datasets[0].data = getTipoEquipeData();
+                charts.tipoEquipe.update();
+            }
+        }
+
+        // Função para obter dados de tempo médio
+        function getTempoMedioData() {
+            let filteredData = acionamentos.filter(a => a.data_acionamento && a.data_alocacao_turma);
+            
+            if (currentFilter !== 'TODOS') {
+                filteredData = filteredData.filter(a => a.status === currentFilter);
+            }
+            
+            if (filteredData.length === 0) return [0];
+
+            let totalDuration = 0;
+            filteredData.forEach(acionamento => {
+                const inicio = new Date(acionamento.data_acionamento);
+                const fim = new Date(acionamento.data_alocacao_turma);
+                const diffMs = fim - inicio;
+                totalDuration += diffMs;
+            });
+
+            const averageMs = totalDuration / filteredData.length;
+            const averageHours = averageMs / (1000 * 60 * 60);
+            
+            return [parseFloat(averageHours.toFixed(2))];
+        }
+
+        // Função para obter dados de tempo por status
+        function getTempoStatusData() {
+            if (currentFilter === 'TODOS') {
+                return [
+                    acionamentos.filter(a => a.status === 'PENDENTE').length,
+                    acionamentos.filter(a => a.status === 'ENVIADO').length,
+                    acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length,
+                    acionamentos.filter(a => a.status === 'FINALIZADO').length
+                ];
+            } else {
+                // Para filtro específico, mostrar distribuição temporal
+                const filtered = acionamentos.filter(a => a.status === currentFilter);
+                const total = filtered.length;
+                return [total * 0.3, total * 0.25, total * 0.25, total * 0.2];
+            }
+        }
+
+        // Função para obter dados por tipo de equipe
+        function getTipoEquipeData() {
+            let filteredData = acionamentos;
+            
+            if (currentFilter !== 'TODOS') {
+                filteredData = acionamentos.filter(a => a.status === currentFilter);
+            }
+            
+            const pesada = filteredData.filter(a => a.tipo_equipe?.includes('PESADA')).length;
+            const poda = filteredData.filter(a => a.tipo_equipe?.includes('PODA')).length;
+            const linhaViva = filteredData.filter(a => a.tipo_equipe?.includes('LINHA_VIVA')).length;
+            const leve = filteredData.filter(a => a.tipo_equipe === 'LEVE').length;
+            
+            return [pesada, poda, linhaViva, leve];
+        }
+
+        // Função para exportar para Excel
+        function exportToExcel() {
+            try {
+                // Filtrar dados baseado na seção atual e permissões
+                let dataToExport = acionamentos;
+                
+                if (currentStatus !== 'TODAS_OCORRENCIAS' && currentStatus !== 'DASHBOARD') {
+                    const statusMap = {
+                        'ACIONAMENTOS_PENDENTES': 'PENDENTE',
+                        'ACIONAMENTOS_ENVIADOS': 'ENVIADO',
+                        'COM_RECURSO_ALOCADO': 'RECURSO_ALOCADO',
+                        'OCORRENCIAS_FINALIZADAS': 'FINALIZADO'
+                    };
+                    dataToExport = acionamentos.filter(a => a.status === statusMap[currentStatus]);
+                } else {
+                    // Para ADMIN2, filtrar acionamentos pendentes
+                    if (currentUser.role === 'admin2') {
+                        dataToExport = acionamentos.filter(a => a.status !== 'PENDENTE');
+                    }
+                }
+                
+                // Função auxiliar para extrair dados do histórico por status
+                function getHistoricoByStatus(historico, status) {
+                    if (!historico || !Array.isArray(historico)) return { data: '', hora: '', usuario: '' };
+                    
+                    const entrada = historico.find(h => h.status_novo === status);
+                    return entrada ? {
+                        data: entrada.data || '',
+                        hora: entrada.hora || '',
+                        usuario: entrada.usuario || ''
+                    } : { data: '', hora: '', usuario: '' };
+                }
+                
+                // Preparar dados para exportação
+                const exportData = dataToExport.map(acionamento => {
+                    const historico = acionamento.historico_status || [];
+                    
+                    // Extrair dados do histórico para cada status
+                    const pendente = getHistoricoByStatus(historico, 'PENDENTE');
+                    const enviado = getHistoricoByStatus(historico, 'ENVIADO');
+                    const recursoAlocado = getHistoricoByStatus(historico, 'RECURSO_ALOCADO');
+                    const finalizado = getHistoricoByStatus(historico, 'FINALIZADO');
+                    
+                    return {
+                        'Número da Ocorrência': acionamento.numero_ocorrencia || acionamento.id,
+                        'Data de Criação': acionamento.data_criacao_ocorrencia || '',
+                        'Horário de Criação': acionamento.horario_criacao_ocorrencia || '',
+                        'Equipe': acionamento.equipe || '',
+                        'Tipo de Equipe': acionamento.tipo_equipe || '',
+                        'Tipo de Defeito': acionamento.tipo_defeito || '',
+                        'Alimentador': acionamento.alimentador || '',
+                        'Tipo de Referência': acionamento.tipo_referencia || '',
+                        'Número da Referência': acionamento.numero_referencia || '',
+                        'Clientes Interrompidos': acionamento.clientes_interrompidos || '',
+                        'Relatório da Ocorrência': acionamento.relatorio_ocorrencia || '',
+                        'Materiais Necessários': acionamento.materiais_necessarios || '',
+                        'Status': getStatusLabel(acionamento.status),
+                        
+                        // Colunas do histórico de status
+                        'Data Pendente': pendente.data,
+                        'Hora Pendente': pendente.hora,
+                        'Usuário Pendente': pendente.usuario,
+                        
+                        'Data Enviado': enviado.data,
+                        'Hora Enviado': enviado.hora,
+                        'Usuário Enviado': enviado.usuario,
+                        
+                        'Data Com Recurso Alocado': recursoAlocado.data,
+                        'Hora Com Recurso Alocado': recursoAlocado.hora,
+                        'Usuário Com Recurso Alocado': recursoAlocado.usuario,
+                        
+                        'Data Finalizado': finalizado.data,
+                        'Hora Finalizado': finalizado.hora,
+                        'Usuário Finalizado': finalizado.usuario,
+                        
+                        // Colunas originais mantidas para compatibilidade
+                        'Data de Acionamento': formatarData(acionamento.data_acionamento) || '',
+                        'Data de Envio': formatarData(acionamento.data_envio) || '',
+                        'Data de Alocação da Turma': formatarData(acionamento.data_alocacao_turma) || '',
+                        'Data de Finalização da Ocorrência': formatarData(acionamento.data_finalizacao) || '',
+                        'Tempo desde Criação': calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, acionamento.data_finalizacao, acionamento.hora_finalizacao),
+                        'Tempo desde Acionamento': calcularTempoDecorrido(acionamento.data_acionamento, null, acionamento.data_finalizacao, acionamento.hora_finalizacao),
+                        'Validado por': acionamento.validado_por || '',
+                        'Alocado por': acionamento.alocado_por || '',
+                        'Finalizado por': acionamento.finalizado_por || ''
+                    };
+                });
+                
+                // Criar workbook
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Acionamentos');
+                
+                // Gerar nome do arquivo
+                const now = new Date();
+                const fileName = `acionamentos_${now.getFullYear()}_${(now.getMonth() + 1).toString().padStart(2, '0')}_${now.getDate().toString().padStart(2, '0')}.xlsx`;
+                
+                // Fazer download
+                XLSX.writeFile(wb, fileName);
+                
+                alert('Relatório Excel exportado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao exportar Excel:', error);
+                alert('Erro ao exportar relatório Excel.');
+            }
+        }
+
+        // Funções para mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -1622,9 +2205,17 @@
             overlay.classList.toggle('show');
         }
 
-        // Função para filtrar por status
-        function filterByStatus(status) {
-            console.log('Filtrando por status:', status);
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            sidebar.classList.remove('show');
+            overlay.classList.remove('show');
+        }
+
+        // Carregar acionamentos inicialmente
+        if (firebaseInitialized) {
+            loadAcionamentos();
         }
     </script>
 </body>
