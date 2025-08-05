@@ -10,8 +10,252 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    
+    <!-- Firebase v9 SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+        import { getFirestore, doc, getDoc, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCv7vfGMSobE1n0M1CECl46LdMy3pdrxh4",
+            authDomain: "pedido-de-material---ilheus.firebaseapp.com",
+            projectId: "pedido-de-material---ilheus",
+            storageBucket: "pedido-de-material---ilheus.appspot.com",
+            messagingSenderId: "155845988594",
+            appId: "1:155845988594:web:322f34f9790f605a92006b"
+        };
+
+        // Inicializar Firebase
+        let app, auth, db;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            console.log('Firebase inicializado com sucesso');
+        } catch (error) {
+            console.error('Erro ao inicializar Firebase:', error);
+            window.showError('Erro ao conectar com o Firebase. Verifique sua conexão com a internet.');
+        }
+
+        // Variáveis globais
+        window.auth = auth;
+        window.db = db;
+        window.currentUser = null;
+        window.userLevel = null;
+
+        // Função para mostrar erros
+        window.showError = function(message) {
+            const loginError = document.getElementById('loginError');
+            if (loginError) {
+                loginError.textContent = message;
+                loginError.classList.remove('d-none');
+            }
+            console.error('Erro:', message);
+        };
+
+        // Função para ocultar erros
+        window.hideError = function() {
+            const loginError = document.getElementById('loginError');
+            if (loginError) {
+                loginError.classList.add('d-none');
+            }
+        };
+
+        // Funções de autenticação
+        window.loginUser = async function(email, password) {
+            console.log('Iniciando processo de login para:', email);
+            
+            try {
+                // Verificar se Firebase foi inicializado
+                if (!auth || !db) {
+                    throw new Error('Firebase não foi inicializado corretamente');
+                }
+
+                console.log('Tentando autenticar com Firebase Auth...');
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                console.log('Usuário autenticado com sucesso:', user.uid);
+                
+                // Verificar se o usuário existe nas coleções
+                console.log('Verificando usuário nas coleções...');
+                const userInfo = await checkUserInCollections(user.uid);
+                
+                if (userInfo) {
+                    console.log('Usuário encontrado na coleção:', userInfo.collection);
+                    window.currentUser = userInfo;
+                    window.userLevel = userInfo.level;
+                    showMainApp();
+                    updateUserInfo(userInfo);
+                    loadAcionamentos();
+                    return true;
+                } else {
+                    console.log('Usuário não encontrado nas coleções autorizadas');
+                    await signOut(auth);
+                    throw new Error('Usuário não autorizado para este sistema. Verifique se seu perfil foi configurado corretamente.');
+                }
+            } catch (error) {
+                console.error('Erro detalhado no login:', error);
+                
+                // Traduzir erros comuns do Firebase
+                let errorMessage = 'Erro ao fazer login. Tente novamente.';
+                
+                if (error.code === 'auth/user-not-found') {
+                    errorMessage = 'Usuário não encontrado. Verifique o e-mail digitado.';
+                } else if (error.code === 'auth/wrong-password') {
+                    errorMessage = 'Senha incorreta. Tente novamente.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = 'E-mail inválido. Verifique o formato do e-mail.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    errorMessage = 'Muitas tentativas de login. Tente novamente em alguns minutos.';
+                } else if (error.code === 'auth/network-request-failed') {
+                    errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                
+                throw new Error(errorMessage);
+            }
+        };
+
+        window.checkUserInCollections = async function(uid) {
+            try {
+                console.log('Verificando UID nas coleções:', uid);
+                
+                // Verificar na coleção usuarioclb (ADMIN1)
+                console.log('Verificando na coleção usuarioclb...');
+                try {
+                    const clbDoc = await getDoc(doc(db, 'usuarioclb', uid));
+                    if (clbDoc.exists()) {
+                        const userData = clbDoc.data();
+                        console.log('Usuário encontrado na coleção usuarioclb:', userData);
+                        return {
+                            uid: uid,
+                            level: 'ADMIN1',
+                            code: userData.codigo || 'CLB000000',
+                            name: userData.nome || 'Administrador CLB',
+                            email: userData.email || '',
+                            collection: 'usuarioclb'
+                        };
+                    }
+                } catch (clbError) {
+                    console.log('Erro ao verificar coleção usuarioclb:', clbError);
+                }
+
+                // Verificar na coleção usuarioEPS (ADMIN2)
+                console.log('Verificando na coleção usuarioEPS...');
+                try {
+                    const epsDoc = await getDoc(doc(db, 'usuarioEPS', uid));
+                    if (epsDoc.exists()) {
+                        const userData = epsDoc.data();
+                        console.log('Usuário encontrado na coleção usuarioEPS:', userData);
+                        return {
+                            uid: uid,
+                            level: 'ADMIN2',
+                            code: userData.codigo || 'EPS000000',
+                            name: userData.nome || 'Administrador EPS',
+                            email: userData.email || '',
+                            collection: 'usuarioEPS'
+                        };
+                    }
+                } catch (epsError) {
+                    console.log('Erro ao verificar coleção usuarioEPS:', epsError);
+                }
+
+                console.log('Usuário não encontrado em nenhuma coleção autorizada');
+                return null;
+            } catch (error) {
+                console.error('Erro geral ao verificar usuário nas coleções:', error);
+                return null;
+            }
+        };
+
+        window.logoutUser = async function() {
+            try {
+                console.log('Fazendo logout...');
+                await signOut(auth);
+                window.currentUser = null;
+                window.userLevel = null;
+                showLoginScreen();
+                console.log('Logout realizado com sucesso');
+            } catch (error) {
+                console.error('Erro no logout:', error);
+            }
+        };
+
+        // Monitorar estado de autenticação
+        onAuthStateChanged(auth, async (user) => {
+            console.log('Estado de autenticação mudou:', user ? user.uid : 'não logado');
+            
+            if (user) {
+                console.log('Usuário logado, verificando permissões...');
+                const userInfo = await checkUserInCollections(user.uid);
+                if (userInfo) {
+                    window.currentUser = userInfo;
+                    window.userLevel = userInfo.level;
+                    showMainApp();
+                    updateUserInfo(userInfo);
+                    loadAcionamentos();
+                } else {
+                    console.log('Usuário sem permissões, fazendo logout...');
+                    await signOut(auth);
+                    showLoginScreen();
+                }
+            } else {
+                console.log('Usuário não logado, mostrando tela de login');
+                showLoginScreen();
+            }
+        });
+
+        // Funções auxiliares
+        window.showLoginScreen = function() {
+            console.log('Mostrando tela de login');
+            document.getElementById('loginScreen').classList.remove('d-none');
+            document.getElementById('mainApp').classList.add('d-none');
+        };
+
+        window.showMainApp = function() {
+            console.log('Mostrando aplicação principal');
+            document.getElementById('loginScreen').classList.add('d-none');
+            document.getElementById('mainApp').classList.remove('d-none');
+        };
+
+        window.updateUserInfo = function(userInfo) {
+            console.log('Atualizando informações do usuário:', userInfo);
+            const roleText = userInfo.level === 'ADMIN1' ? 'Administrador CLB' : 'Administrador EPS';
+            document.getElementById('userRole').textContent = roleText;
+            document.getElementById('userCode').textContent = userInfo.code;
+        };
+
+        // Função de teste de conectividade
+        window.testFirebaseConnection = async function() {
+            try {
+                console.log('Testando conexão com Firebase...');
+                
+                // Testar Auth
+                console.log('Auth disponível:', !!auth);
+                
+                // Testar Firestore
+                console.log('Firestore disponível:', !!db);
+                
+                // Tentar uma operação simples no Firestore
+                const testDoc = doc(db, 'test', 'connection');
+                console.log('Teste de conexão Firestore concluído');
+                
+                return true;
+            } catch (error) {
+                console.error('Erro no teste de conectividade:', error);
+                return false;
+            }
+        };
+
+        // Executar teste de conectividade quando a página carregar
+        window.addEventListener('load', function() {
+            setTimeout(testFirebaseConnection, 1000);
+        });
+    </script>
     
     <!-- SheetJS para exportação Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -174,6 +418,11 @@
             background: var(--primary-700);
         }
 
+        .btn-primary:disabled {
+            background: var(--neutral-400);
+            cursor: not-allowed;
+        }
+
         .btn-secondary {
             background: var(--neutral-600);
             color: white;
@@ -207,6 +456,24 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .debug-info {
+            background: #e3f2fd;
+            color: #0d47a1;
+            border: 1px solid #bbdefb;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-top: 1rem;
+            max-height: 100px;
+            overflow-y: auto;
         }
 
         /* Layout Principal */
@@ -552,127 +819,6 @@
             color: #721c24;
         }
 
-        /* Modal */
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s;
-            padding: 1rem;
-        }
-
-        .modal.show {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 800px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--neutral-200);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .modal-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--neutral-800);
-            margin: 0;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            color: var(--neutral-600);
-            cursor: pointer;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-        }
-
-        .modal-close:hover {
-            background: var(--neutral-100);
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-        }
-
-        .modal-footer {
-            padding: 1.5rem;
-            border-top: 1px solid var(--neutral-200);
-            display: flex;
-            gap: 0.5rem;
-            justify-content: flex-end;
-            flex-wrap: wrap;
-        }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group-full {
-            grid-column: 1 / -1;
-        }
-
-        .form-control:disabled {
-            background: var(--neutral-100);
-            color: var(--neutral-600);
-        }
-
-        .editable-field {
-            border-color: var(--success) !important;
-        }
-
-        .historico-section {
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--neutral-200);
-        }
-
-        .historico-title {
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--neutral-800);
-            margin: 0 0 1rem 0;
-        }
-
-        .historico-container {
-            max-height: 200px;
-            overflow-y: auto;
-            background: var(--neutral-50);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
         /* Responsividade */
         @media (max-width: 768px) {
             .sidebar {
@@ -702,24 +848,6 @@
 
             .charts-grid {
                 grid-template-columns: 1fr;
-            }
-
-            .form-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .modal-content {
-                margin: 1rem;
-                max-height: calc(100vh - 2rem);
-            }
-
-            .table-container {
-                font-size: 0.75rem;
-            }
-
-            .table th,
-            .table td {
-                padding: 0.5rem 0.25rem;
             }
 
             .header-actions {
@@ -789,10 +917,10 @@
             
             <form id="loginForm">
                 <div class="form-group">
-                    <label class="form-label" for="username">
-                        <i class="fas fa-user"></i> Usuário
+                    <label class="form-label" for="email">
+                        <i class="fas fa-envelope"></i> E-mail
                     </label>
-                    <input type="text" id="username" class="form-control" placeholder="Digite seu usuário" required>
+                    <input type="email" id="email" class="form-control" placeholder="Digite seu e-mail" required>
                 </div>
                 
                 <div class="form-group">
@@ -803,13 +931,23 @@
                 </div>
                 
                 <div id="loginError" class="alert alert-danger d-none">
-                    Usuário ou senha incorretos.
+                    E-mail ou senha incorretos.
                 </div>
                 
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" id="loginBtn">
                     <i class="fas fa-sign-in-alt"></i> Entrar
                 </button>
+                
+                <button type="button" class="btn btn-secondary mt-3" onclick="testFirebaseConnection()" style="width: 100%;">
+                    <i class="fas fa-wifi"></i> Testar Conexão
+                </button>
             </form>
+            
+            <!-- Área de debug -->
+            <div id="debugInfo" class="debug-info d-none">
+                <strong>Debug Info:</strong><br>
+                <div id="debugContent">Carregando...</div>
+            </div>
         </div>
     </div>
 
@@ -828,8 +966,8 @@
             </div>
             
             <div class="user-info">
-                <div id="userRole" class="user-role">Desenvolvedor</div>
-                <div id="userCode" class="user-code">CLB354374</div>
+                <div id="userRole" class="user-role">Carregando...</div>
+                <div id="userCode" class="user-code">Carregando...</div>
             </div>
             
             <nav class="sidebar-menu">
@@ -1014,356 +1152,149 @@
         </div>
     </div>
 
-    <!-- Modal de Edição -->
-    <div id="editModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Editar Acionamento</h3>
-                <button class="modal-close" onclick="closeEditModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="modal-body">
-                <form id="editForm">
-                    <input type="hidden" id="editId">
-                    
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label" for="editNumero">Número da Ocorrência</label>
-                            <input type="text" id="editNumero" class="form-control" disabled>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editDataCriacao">Data de Criação</label>
-                            <input type="date" id="editDataCriacao" class="form-control">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editHorarioCriacao">Horário de Criação</label>
-                            <input type="time" id="editHorarioCriacao" class="form-control">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editEquipe">Equipe</label>
-                            <select id="editEquipe" class="form-control">
-                                <option value="">Selecione a equipe</option>
-                                <option value="EQUIPE_01">EQUIPE 01</option>
-                                <option value="EQUIPE_02">EQUIPE 02</option>
-                                <option value="EQUIPE_03">EQUIPE 03</option>
-                                <option value="EQUIPE_04">EQUIPE 04</option>
-                                <option value="EQUIPE_05">EQUIPE 05</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editTipoEquipe">Tipo de Equipe</label>
-                            <select id="editTipoEquipe" class="form-control">
-                                <option value="">Selecione o tipo</option>
-                                <option value="PESADA">PESADA</option>
-                                <option value="PODA">PODA</option>
-                                <option value="LINHA_VIVA">LINHA VIVA</option>
-                                <option value="LEVE">LEVE</option>
-                                <option value="PESADA_PODA">PESADA+PODA</option>
-                                <option value="PESADA_LINHA_VIVA">PESADA+LINHA VIVA</option>
-                                <option value="LINHA_VIVA_PODA">LINHA VIVA+PODA</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editTipoDefeito">Tipo de Defeito</label>
-                            <select id="editTipoDefeito" class="form-control">
-                                <option value="">Selecione o defeito</option>
-                                <option value="POSTE">POSTE</option>
-                                <option value="TRAFO">TRAFO</option>
-                                <option value="VAO_REDE">VÃO DE REDE</option>
-                                <option value="PODA">PODA</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editAlimentador">Alimentador</label>
-                            <input type="text" id="editAlimentador" class="form-control">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editTipoReferencia">Tipo de Referência</label>
-                            <select id="editTipoReferencia" class="form-control">
-                                <option value="">Tipo</option>
-                                <option value="PG">PG</option>
-                                <option value="TRAFO">TRAFO</option>
-                                <option value="MEDIDOR">MEDIDOR</option>
-                                <option value="CC">CC</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="editNumeroReferencia">Número da Referência</label>
-                            <input type="text" id="editNumeroReferencia" class="form-control">
-                        </div>
-                        
-                        <div id="clientesInterrompidosGroup" class="form-group">
-                            <label class="form-label" for="editClientesInterrompidos">Clientes Interrompidos</label>
-                            <input type="text" id="editClientesInterrompidos" class="form-control" placeholder="Digite um número ou 'calculando'">
-                        </div>
-                        
-                        <div class="form-group form-group-full">
-                            <label class="form-label" for="editRelatorio">Relatório da Ocorrência</label>
-                            <textarea id="editRelatorio" class="form-control" rows="4"></textarea>
-                        </div>
-                        
-                        <div class="form-group form-group-full">
-                            <label class="form-label" for="editMateriais">Materiais Necessários</label>
-                            <textarea id="editMateriais" class="form-control" rows="3"></textarea>
-                        </div>
-                    </div>
-                    
-                    <!-- Histórico -->
-                    <div class="historico-section">
-                        <h4 class="historico-title">Histórico de Alterações</h4>
-                        <div id="historicoContainer" class="historico-container">
-                            <p>Nenhum histórico disponível.</p>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancelar</button>
-                <button type="button" id="salvarBtn" class="btn btn-primary" onclick="salvarEdicao()">Salvar</button>
-                <button type="button" id="validarBtn" class="btn btn-success" onclick="validarAcionamento()">Validar</button>
-                <button type="button" id="alocarBtn" class="btn btn-primary" onclick="alocarRecurso()">Alocar Recurso</button>
-                <button type="button" id="finalizarBtn" class="btn btn-success" onclick="finalizarAcionamento()">Finalizar</button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        // Configuração do Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyCv7vfGMSobE1n0M1CECl46LdMy3pdrxh4",
-            authDomain: "pedido-de-material---ilheus.firebaseapp.com",
-            projectId: "pedido-de-material---ilheus",
-            storageBucket: "pedido-de-material---ilheus.appspot.com",
-            messagingSenderId: "155845988594",
-            appId: "1:155845988594:web:322f34f9790f605a92006b"
-        };
-
-        // Inicializar Firebase
-        let db = null;
-        let firebaseInitialized = false;
-
-        function initializeFirebase() {
-            try {
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                }
-                db = firebase.firestore();
-                firebaseInitialized = true;
-                console.log('Firebase inicializado com sucesso no admin');
-            } catch (error) {
-                console.error('Erro ao inicializar Firebase no admin:', error);
-                firebaseInitialized = false;
-            }
-        }
-
-        // Variáveis globais
-        let currentUser = null;
+        // Variáveis globais para dados
         let acionamentos = [];
-        let currentStatus = 'DASHBOARD';
-        let sessionTimeout = null;
         let currentFilter = 'TODOS';
         let charts = {};
 
-        const SESSION_DURATION = 30 * 60 * 1000; // 30 minutos
-
-        // Credenciais de usuários
-        const users = {
-            'CLB354374': { password: '*2025*Coelba', role: 'admin1', name: 'THIAGO MOREIRA' },
-            'EPS354374': { password: 'TESTE', role: 'admin2', name: 'COLABORADOR EPS' }	
-        };
-
-        // Inicializar aplicação
-        document.addEventListener('DOMContentLoaded', () => {
-            // Registrar plugin datalabels
-            Chart.register(ChartDataLabels);
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM carregado, configurando event listeners...');
             
-            initializeFirebase();
-            
-            // Verificar sessão existente
-            if (!checkSession()) {
-                // Configurar formulário de login
-                document.getElementById('loginForm').addEventListener('submit', handleLogin);
-            } else {
-                // Se já está logado, carregar dados
-                setTimeout(() => {
-                    loadAcionamentos();
-                }, 1000);
+            // Login form
+            const loginForm = document.getElementById('loginForm');
+            if (loginForm) {
+                loginForm.addEventListener('submit', handleLogin);
+                console.log('Event listener do formulário de login configurado');
             }
             
-            // Configurar menu
+            // Menu items
             document.querySelectorAll('.menu-item[data-section]').forEach(item => {
-                item.addEventListener('click', () => {
-                    const section = item.getAttribute('data-section');
-                    showSection(section);
+                item.addEventListener('click', function() {
+                    const section = this.getAttribute('data-section');
+                    switchSection(section);
                 });
             });
-            
-            // Configurar overlay do sidebar
-            document.getElementById('sidebarOverlay').addEventListener('click', closeSidebar);
-            
-            // Atualizar colunas de tempo a cada minuto
-            setInterval(updateTimeColumns, 60000);
+
+            // Sidebar overlay
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', function() {
+                    toggleSidebar();
+                });
+            }
+
+            // Mostrar informações de debug
+            updateDebugInfo();
         });
 
-        // Função de login
-        function handleLogin(event) {
-            event.preventDefault();
+        // Função de debug
+        function updateDebugInfo() {
+            const debugContent = document.getElementById('debugContent');
+            if (debugContent) {
+                const info = [
+                    `Timestamp: ${new Date().toLocaleString()}`,
+                    `User Agent: ${navigator.userAgent.substring(0, 50)}...`,
+                    `Firebase Auth: ${window.auth ? 'Carregado' : 'Não carregado'}`,
+                    `Firebase DB: ${window.db ? 'Carregado' : 'Não carregado'}`,
+                    `URL: ${window.location.href}`
+                ];
+                debugContent.innerHTML = info.join('<br>');
+            }
+        }
+
+        // Função de login com melhor tratamento de erros
+        async function handleLogin(e) {
+            e.preventDefault();
+            console.log('Formulário de login submetido');
             
-            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('loginError');
+            const loginBtn = document.getElementById('loginBtn');
+            const loginError = document.getElementById('loginError');
+            const debugInfo = document.getElementById('debugInfo');
             
-            if (users[username] && users[username].password === password) {
-                currentUser = {
-                    username: username,
-                    role: users[username].role,
-                    name: users[username].name
-                };
+            // Validações básicas
+            if (!email || !password) {
+                window.showError('Por favor, preencha todos os campos.');
+                return;
+            }
+
+            if (!email.includes('@')) {
+                window.showError('Por favor, digite um e-mail válido.');
+                return;
+            }
+            
+            // Mostrar área de debug
+            debugInfo.classList.remove('d-none');
+            updateDebugInfo();
+            
+            // Desabilitar botão e mostrar loading
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
+            window.hideError();
+            
+            console.log('Iniciando processo de login...');
+            
+            try {
+                // Verificar se Firebase está disponível
+                if (!window.auth || !window.db) {
+                    throw new Error('Firebase não está disponível. Verifique sua conexão com a internet e tente novamente.');
+                }
+
+                console.log('Firebase disponível, tentando login...');
+                const success = await window.loginUser(email, password);
                 
-                // Salvar sessão
-                const sessionData = {
-                    user: currentUser,
-                    timestamp: Date.now()
-                };
-                localStorage.setItem('clb_session', JSON.stringify(sessionData));
-                
-                // Atualizar interface
-                document.getElementById('userRole').textContent = currentUser.name;
-                document.getElementById('userCode').textContent = currentUser.username;
-                
-                // Configurar permissões do menu
-                setupMenuPermissions();
-                
-                // Mostrar aplicação
-                document.getElementById('loginScreen').classList.add('d-none');
-                document.getElementById('mainApp').classList.remove('d-none');
-                
-                // Configurar timeout de sessão
-                resetSessionTimeout();
-                
-                // Redirecionar ADMIN2 para acionamentos enviados
-                if (currentUser.role === 'admin2') {
-                    showSection('acionamentos_enviados');
+                if (success) {
+                    console.log('Login realizado com sucesso');
                 } else {
-                    showSection('dashboard');
+                    throw new Error('Falha no processo de login');
                 }
                 
-                errorDiv.classList.add('d-none');
-            } else {
-                errorDiv.classList.remove('d-none');
-            }
-        }
-
-        // Função para configurar permissões do menu
-        function setupMenuPermissions() {
-            const menuItems = document.querySelectorAll('.menu-item');
-            
-            menuItems.forEach(item => {
-                const section = item.getAttribute('data-section');
+            } catch (error) {
+                console.error('Erro no login:', error);
+                window.showError(error.message || 'Erro desconhecido ao fazer login');
                 
-                if (currentUser.role === 'admin2') {
-                    // ADMIN2 não pode acessar acionamentos pendentes e todas as ocorrências
-                    if (section === 'acionamentos_pendentes' || section === 'todas_ocorrencias') {
-                        item.style.display = 'none';
-                    }
+                // Atualizar debug info com erro
+                const debugContent = document.getElementById('debugContent');
+                if (debugContent) {
+                    debugContent.innerHTML += `<br><strong>Erro:</strong> ${error.message}`;
                 }
-            });
-        }
-
-        // Função para verificar sessão
-        function checkSession() {
-            const sessionData = localStorage.getItem('clb_session');
-            
-            if (sessionData) {
-                const session = JSON.parse(sessionData);
-                const now = Date.now();
+            } finally {
+                // Reabilitar botão
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
                 
-                // Verificar se a sessão não expirou
-                if (now - session.timestamp < SESSION_DURATION) {
-                    currentUser = session.user;
-                    
-                    // Atualizar interface
-                    document.getElementById('userRole').textContent = currentUser.name;
-                    document.getElementById('userCode').textContent = currentUser.username;
-                    
-                    // Configurar permissões do menu
-                    setupMenuPermissions();
-                    
-                    // Mostrar aplicação
-                    document.getElementById('loginScreen').classList.add('d-none');
-                    document.getElementById('mainApp').classList.remove('d-none');
-                    
-                    // Configurar timeout de sessão
-                    resetSessionTimeout();
-                    
-                    return true;
-                }
+                // Atualizar debug info
+                updateDebugInfo();
             }
-            
-            // Limpar sessão expirada
-            localStorage.removeItem('clb_session');
-            return false;
-        }
-
-        // Função para resetar timeout de sessão
-        function resetSessionTimeout() {
-            if (sessionTimeout) {
-                clearTimeout(sessionTimeout);
-            }
-            
-            sessionTimeout = setTimeout(() => {
-                logout();
-                alert('Sua sessão expirou. Faça login novamente.');
-            }, SESSION_DURATION);
         }
 
         // Função de logout
-        function logout() {
-            currentUser = null;
-            localStorage.removeItem('clb_session');
-            
-            if (sessionTimeout) {
-                clearTimeout(sessionTimeout);
+        async function logout() {
+            try {
+                console.log('Iniciando logout...');
+                await window.logoutUser();
+            } catch (error) {
+                console.error('Erro no logout:', error);
+                // Forçar logout local se houver erro
+                window.currentUser = null;
+                window.userLevel = null;
+                window.showLoginScreen();
             }
-            
-            document.getElementById('loginScreen').classList.remove('d-none');
-            document.getElementById('mainApp').classList.add('d-none');
-            
-            // Limpar formulário
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
-            document.getElementById('loginError').classList.add('d-none');
         }
 
-        // Função para mostrar seção
-        function showSection(section) {
-            // Resetar timeout de sessão em qualquer atividade
-            resetSessionTimeout();
+        // Função para alternar seções
+        function switchSection(section) {
+            console.log('Alternando para seção:', section);
             
-            // Verificar permissões
-            if (currentUser.role === 'admin2') {
-                if (section === 'acionamentos_pendentes' || section === 'todas_ocorrencias') {
-                    return; // Silenciosamente não fazer nada
-                }
-            }
-            
-            currentStatus = section.toUpperCase();
-            
-            // Atualizar menu ativo
+            // Remover classe active de todos os itens
             document.querySelectorAll('.menu-item').forEach(item => {
                 item.classList.remove('active');
             });
+            
+            // Adicionar classe active ao item clicado
             const activeItem = document.querySelector(`[data-section="${section}"]`);
             if (activeItem) {
                 activeItem.classList.add('active');
@@ -1374,18 +1305,18 @@
                 document.getElementById('dashboardSection').classList.remove('d-none');
                 document.getElementById('acionamentosSection').classList.add('d-none');
                 document.getElementById('pageTitle').textContent = 'Dashboard';
-                loadDashboard();
+                updateCharts();
             } else {
                 document.getElementById('dashboardSection').classList.add('d-none');
                 document.getElementById('acionamentosSection').classList.remove('d-none');
                 
-                // Atualizar títulos
+                // Atualizar títulos baseado na seção
                 const titles = {
-                    'acionamentos_pendentes': { title: 'Acionamentos Pendentes', subtitle: 'Gerencie os acionamentos que aguardam validação' },
-                    'acionamentos_enviados': { title: 'Acionamentos Enviados', subtitle: 'Acionamentos enviados para a EPS' },
-                    'com_recurso_alocado': { title: 'Com Recurso Alocado', subtitle: 'Acionamentos com equipe alocada' },
+                    'acionamentos_pendentes': { title: 'Acionamentos Pendentes', subtitle: 'Acionamentos aguardando envio' },
+                    'acionamentos_enviados': { title: 'Acionamentos Enviados', subtitle: 'Acionamentos enviados para as equipes' },
+                    'com_recurso_alocado': { title: 'Com Recurso Alocado', subtitle: 'Acionamentos com equipes alocadas' },
                     'ocorrencias_finalizadas': { title: 'Ocorrências Finalizadas', subtitle: 'Acionamentos finalizados' },
-                    'todas_ocorrencias': { title: 'Todas as Ocorrências', subtitle: 'Visualização completa de todos os acionamentos' }
+                    'todas_ocorrencias': { title: 'Todas as Ocorrências', subtitle: 'Todos os acionamentos do sistema' }
                 };
                 
                 const sectionInfo = titles[section];
@@ -1393,830 +1324,292 @@
                     document.getElementById('pageTitle').textContent = sectionInfo.title;
                     document.getElementById('sectionTitle').textContent = sectionInfo.title;
                     document.getElementById('sectionSubtitle').textContent = sectionInfo.subtitle;
-                    document.getElementById('cardTitle').textContent = sectionInfo.title;
                 }
                 
-                loadAcionamentos();
-            }
-        }
-
-        // Função para carregar acionamentos
-        async function loadAcionamentos() {
-            if (!firebaseInitialized) {
-                console.log('Firebase não inicializado');
-                return;
-            }
-            
-            try {
-                document.getElementById('loadingState').classList.remove('d-none');
-                document.getElementById('emptyState').classList.add('d-none');
-                document.getElementById('tableContainer').classList.add('d-none');
+                // Filtrar dados baseado na seção
+                const statusMap = {
+                    'acionamentos_pendentes': 'PENDENTE',
+                    'acionamentos_enviados': 'ENVIADO',
+                    'com_recurso_alocado': 'RECURSO_ALOCADO',
+                    'ocorrencias_finalizadas': 'FINALIZADO',
+                    'todas_ocorrencias': 'TODOS'
+                };
                 
-                const snapshot = await db.collection('acionamentos').get();
-                acionamentos = [];
-                
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    acionamentos.push({
-                        id: doc.id,
-                        ...data
-                    });
-                });
-                
-                // Filtrar por status
-                let filteredAcionamentos = acionamentos;
-                if (currentStatus !== 'TODAS_OCORRENCIAS') {
-                    const statusMap = {
-                        'ACIONAMENTOS_PENDENTES': 'PENDENTE',
-                        'ACIONAMENTOS_ENVIADOS': 'ENVIADO',
-                        'COM_RECURSO_ALOCADO': 'RECURSO_ALOCADO',
-                        'OCORRENCIAS_FINALIZADAS': 'FINALIZADO'
-                    };
-                    filteredAcionamentos = acionamentos.filter(a => a.status === statusMap[currentStatus]);
-                } else {
-                    // Para ADMIN2, filtrar acionamentos pendentes em "todas as ocorrências"
-                    if (currentUser.role === 'admin2') {
-                        filteredAcionamentos = acionamentos.filter(a => a.status !== 'PENDENTE');
-                    }
+                const status = statusMap[section];
+                if (status) {
+                    filterByStatus(status);
                 }
-                
-                document.getElementById('loadingState').classList.add('d-none');
-                
-                if (filteredAcionamentos.length === 0) {
-                    document.getElementById('emptyState').classList.remove('d-none');
-                } else {
-                    document.getElementById('tableContainer').classList.remove('d-none');
-                    renderAcionamentosTable(filteredAcionamentos);
-                }
-                
-                // Atualizar contador
-                document.getElementById('cardCount').textContent = `${filteredAcionamentos.length} acionamentos`;
-                
-                // Atualizar contadores do menu
-                updateCounters();
-                
-            } catch (error) {
-                console.error('Erro ao carregar acionamentos:', error);
-                document.getElementById('loadingState').classList.add('d-none');
-                document.getElementById('emptyState').classList.remove('d-none');
             }
-        }
-
-        // Função para renderizar tabela de acionamentos
-        function renderAcionamentosTable(data) {
-            const tbody = document.getElementById('acionamentosTableBody');
-            if (!tbody) {
-                console.error('Elemento acionamentosTableBody não encontrado');
-                return;
-            }
-            
-            tbody.innerHTML = '';
-            
-            if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;">Nenhum acionamento encontrado</td></tr>';
-                return;
-            }
-            
-            data.forEach(acionamento => {
-                const row = document.createElement('tr');
-                
-                // Calcular tempos
-                const dataFim = acionamento.status === 'FINALIZADO' ? acionamento.data_finalizacao : null;
-                const horaFim = acionamento.status === 'FINALIZADO' ? acionamento.hora_finalizacao : null;
-                const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, dataFim, horaFim);
-                const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao, null, dataFim, horaFim);
-                
-                // Criar células individualmente para garantir que o botão seja renderizado
-                const cells = [
-                    acionamento.numero_ocorrencia || acionamento.id,
-                    acionamento.equipe || '-',
-                    acionamento.tipo_defeito || '-',
-                    acionamento.alimentador || '-',
-                    `${acionamento.tipo_referencia || ''} ${acionamento.numero_referencia || ''}`.trim(),
-                    acionamento.clientes_interrompidos || '-',
-                    tempoDesdeCreacao,
-                    tempoDesdeAcionamento,
-                    `<span class="status-badge status-${acionamento.status?.toLowerCase() || 'pendente'}">${getStatusLabel(acionamento.status)}</span>`,
-                    formatarData(acionamento.data_criacao_ocorrencia)
-                ];
-                
-                // Adicionar células de dados
-                cells.forEach((cellContent, index) => {
-                    const td = document.createElement('td');
-                    if (index === 5 || index === 6) { // Colunas de tempo
-                        td.className = 'time-column';
-                    }
-                    td.innerHTML = cellContent;
-                    row.appendChild(td);
-                });
-                
-                // Adicionar célula de ações
-                const actionTd = document.createElement('td');
-                const editButton = document.createElement('button');
-                editButton.className = 'btn btn-primary btn-sm';
-                editButton.innerHTML = '<i class="fas fa-edit"></i>';
-                editButton.onclick = function() {
-                    editAcionamento(acionamento.id);
-                };
-                actionTd.appendChild(editButton);
-                row.appendChild(actionTd);
-                
-                tbody.appendChild(row);
-            });
-            
-            console.log(`Tabela renderizada com ${data.length} acionamentos`);
-        }
-
-        // Função para calcular tempo decorrido
-        function calcularTempoDecorrido(dataInicio, horaInicio = null, dataFim = null, horaFim = null) {
-            if (!dataInicio) return '-';
-            
-            let inicio;
-            if (horaInicio) {
-                inicio = new Date(`${dataInicio}T${horaInicio}`);
-            } else {
-                inicio = new Date(dataInicio);
-            }
-            
-            if (isNaN(inicio.getTime())) return '-';
-            
-            let fim;
-            if (dataFim) {
-                if (horaFim) {
-                    fim = new Date(`${dataFim}T${horaFim}`);
-                } else {
-                    fim = new Date(dataFim);
-                }
-            } else {
-                fim = new Date(); // Usa a data/hora atual se não houver data de fim
-            }
-
-            const diffMs = fim - inicio;
-            
-            if (diffMs < 0) return '-';
-            
-            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-            
-            if (diffHours > 0) {
-                return `${diffHours}h ${diffMinutes}m`;
-            } else {
-                return `${diffMinutes}m`;
-            }
-        }
-
-        // Função para atualizar colunas de tempo
-        function updateTimeColumns() {
-            const rows = document.querySelectorAll('#acionamentosTableBody tr');
-            rows.forEach((row, index) => {
-                if (index < acionamentos.length) {
-                    const acionamento = acionamentos[index];
-                    const dataFim = acionamento.status === 'FINALIZADO' ? acionamento.data_finalizacao : null;
-                    const horaFim = acionamento.status === 'FINALIZADO' ? acionamento.hora_finalizacao : null;
-                    const tempoDesdeCreacao = calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, dataFim, horaFim);
-                    const tempoDesdeAcionamento = calcularTempoDecorrido(acionamento.data_criacao, null, dataFim, horaFim);
-                    
-                    const cells = row.querySelectorAll('.time-column');
-                    if (cells.length >= 2) {
-                        cells[0].textContent = tempoDesdeCreacao;
-                        cells[1].textContent = tempoDesdeAcionamento;
-                    }
-                }
-            });
-        }
-
-        // Função para formatar data
-        function formatarData(data) {
-            if (!data) return '-';
-            if (data.includes('T')) {
-                return new Date(data).toLocaleDateString('pt-BR');
-            }
-            return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
-        }
-
-        // Função para obter label do status
-        function getStatusLabel(status) {
-            const labels = {
-                'PENDENTE': 'Pendente',
-                'ENVIADO': 'Enviado',
-                'RECURSO_ALOCADO': 'Com Recurso',
-                'FINALIZADO': 'Finalizado'
-            };
-            return labels[status] || 'Pendente';
-        }
-
-        // Função para atualizar contadores
-        function updateCounters() {
-            const pendentes = acionamentos.filter(a => a.status === 'PENDENTE').length;
-            const enviados = acionamentos.filter(a => a.status === 'ENVIADO').length;
-            const recurso = acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length;
-            const finalizadas = acionamentos.filter(a => a.status === 'FINALIZADO').length;
-            
-            document.getElementById('pendentesCount').textContent = pendentes;
-            document.getElementById('enviadosCount').textContent = enviados;
-            document.getElementById('recursoCount').textContent = recurso;
-            document.getElementById('finalizadasCount').textContent = finalizadas;
-            document.getElementById('todasCount').textContent = acionamentos.length;
-        }
-
-        // Função para editar acionamento
-        function editAcionamento(id) {
-            const acionamento = acionamentos.find(a => a.id === id);
-            if (!acionamento) return;
-            
-            // Preencher formulário
-            document.getElementById('editId').value = id;
-            document.getElementById('editNumero').value = acionamento.numero_ocorrencia || acionamento.id;
-            document.getElementById('editDataCriacao').value = acionamento.data_criacao_ocorrencia || '';
-            document.getElementById('editHorarioCriacao').value = acionamento.horario_criacao_ocorrencia || '';
-            document.getElementById('editEquipe').value = acionamento.equipe || '';
-            document.getElementById('editTipoEquipe').value = acionamento.tipo_equipe || '';
-            document.getElementById("editTipoDefeito").value = acionamento.tipo_defeito || '';
-            document.getElementById("editAlimentador").value = acionamento.alimentador || '';
-            document.getElementById('editTipoReferencia').value = acionamento.tipo_referencia || '';
-            document.getElementById('editNumeroReferencia').value = acionamento.numero_referencia || '';
-            document.getElementById('editClientesInterrompidos').value = acionamento.clientes_interrompidos || '';
-            document.getElementById('editRelatorio').value = acionamento.relatorio_ocorrencia || '';
-            document.getElementById('editMateriais').value = acionamento.materiais_necessarios || '';
-
-            // Exibir histórico
-            const historicoContainer = document.getElementById('historicoContainer');
-            historicoContainer.innerHTML = '';
-            if (acionamento.historico && acionamento.historico.length > 0) {
-                acionamento.historico.forEach(entry => {
-                    const p = document.createElement('p');
-                    const date = new Date(entry.data).toLocaleString('pt-BR');
-                    p.innerHTML = `<strong>${date}</strong> - ${entry.usuario}: ${entry.acao}`;
-                    p.style.marginBottom = '0.5rem';
-                    p.style.fontSize = '0.875rem';
-                    historicoContainer.appendChild(p);
-                });
-            } else {
-                historicoContainer.innerHTML = '<p>Nenhum histórico disponível.</p>';
-            }
-            
-            // Configurar permissões de edição
-            const isAdmin1 = currentUser.role === 'admin1';
-            const status = acionamento.status || 'PENDENTE';
-            const isFinalizado = status === 'FINALIZADO';
-            
-            // Campos editáveis baseado no status e permissões
-            const campos = ['editDataCriacao', 'editHorarioCriacao', 'editEquipe', 'editTipoEquipe', 'editTipoDefeito', 'editAlimentador', 'editTipoReferencia', 'editNumeroReferencia', 'editMateriais'];
-            
-            campos.forEach(campo => {
-                const element = document.getElementById(campo);
-                if (status === 'PENDENTE' && isAdmin1) {
-                    element.disabled = false;
-                    element.classList.add('editable-field');
-                } else {
-                    element.disabled = true;
-                    element.classList.remove('editable-field');
-                }
-            });
-            
-            // Campo de clientes interrompidos - editável por admin1 até finalizar
-            const clientesField = document.getElementById('editClientesInterrompidos');
-            if (isAdmin1 && !isFinalizado) {
-                clientesField.disabled = false;
-                clientesField.classList.add('editable-field');
-            } else {
-                clientesField.disabled = true;
-                clientesField.classList.remove('editable-field');
-            }
-            
-            // Campo de relatório - sempre editável até finalizar
-            const relatorioField = document.getElementById('editRelatorio');
-            if (!isFinalizado) {
-                relatorioField.disabled = false;
-                relatorioField.classList.add('editable-field');
-            } else {
-                relatorioField.disabled = true;
-                relatorioField.classList.remove('editable-field');
-            }
-            
-            // Mostrar/ocultar campo de clientes interrompidos baseado no status
-            const clientesGroup = document.getElementById('clientesInterrompidosGroup');
-            clientesGroup.style.display = 'block'; // Sempre mostrar para visualização
-            
-            // Configurar botões de ação
-            document.getElementById('salvarBtn').style.display = (!isFinalizado) ? 'inline-flex' : 'none';
-            document.getElementById('validarBtn').style.display = (status === 'PENDENTE' && isAdmin1) ? 'inline-flex' : 'none';
-            document.getElementById('alocarBtn').style.display = (status === 'ENVIADO') ? 'inline-flex' : 'none';
-            document.getElementById('finalizarBtn').style.display = (status === 'RECURSO_ALOCADO') ? 'inline-flex' : 'none';
-            
-            // Mostrar modal
-            document.getElementById('editModal').classList.add('show');
-        }
-
-        // Função para fechar modal
-        function closeEditModal() {
-            document.getElementById('editModal').classList.remove('show');
-        }
-
-        // Função para salvar edição
-        async function salvarEdicao() {
-            try {
-                const id = document.getElementById('editId').value;
-                const acionamentoRef = db.collection('acionamentos').doc(id);
-                const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
-
-                const agora = new Date();
-                const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
-                    usuario: currentUser.username,
-                    acao: 'Dados editados',
-                    status_anterior: doc.exists ? doc.data().status : null,
-                    status_novo: doc.exists ? doc.data().status : null
-                };
-
-                const dadosAtualizados = {
-                    data_criacao_ocorrencia: document.getElementById('editDataCriacao').value,
-                    horario_criacao_ocorrencia: document.getElementById('editHorarioCriacao').value,
-                    equipe: document.getElementById('editEquipe').value,
-                    tipo_equipe: document.getElementById('editTipoEquipe').value,
-                    tipo_defeito: document.getElementById('editTipoDefeito').value,
-                    alimentador: document.getElementById('editAlimentador').value,
-                    tipo_referencia: document.getElementById('editTipoReferencia').value,
-                    numero_referencia: document.getElementById('editNumeroReferencia').value,
-                    clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
-                    relatorio_ocorrencia: document.getElementById('editRelatorio').value,
-                    materiais_necessarios: document.getElementById('editMateriais').value,
-                    historico_status: [...historicoAtual, novoHistorico]
-                };
-
-                await acionamentoRef.update(dadosAtualizados);
-                
-                closeEditModal();
-                loadAcionamentos();
-                
-                alert('Acionamento atualizado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao salvar edição:', error);
-                alert('Erro ao salvar alterações.');
-            }
-        }
-
-        // Função para validar acionamento
-        async function validarAcionamento() {
-            try {
-                const id = document.getElementById('editId').value;
-                
-                const acionamentoRef = db.collection('acionamentos').doc(id);
-                const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
-
-                const agora = new Date();
-                const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
-                    usuario: currentUser.username,
-                    acao: 'Acionamento validado e enviado',
-                    status_anterior: 'PENDENTE',
-                    status_novo: 'ENVIADO'
-                };
-
-                await acionamentoRef.update({
-                    status: 'ENVIADO',
-                    data_validacao: new Date().toISOString(),
-                    validado_por: currentUser.username,
-                    historico_status: [...historicoAtual, novoHistorico]
-                });
-                
-                closeEditModal();
-                loadAcionamentos();
-                
-                alert('Acionamento validado e enviado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao validar acionamento:', error);
-                alert('Erro ao validar acionamento.');
-            }
-        }
-
-        // Função para alocar recurso
-        async function alocarRecurso() {
-            const equipe = prompt('Digite a equipe a ser alocada:');
-            if (!equipe) return;
-            
-            try {
-                const id = document.getElementById('editId').value;
-                
-                const acionamentoRef = db.collection('acionamentos').doc(id);
-                const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
-
-                const agora = new Date();
-                const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
-                    usuario: currentUser.username,
-                    acao: `Recurso alocado - Equipe: ${equipe}`,
-                    status_anterior: 'ENVIADO',
-                    status_novo: 'RECURSO_ALOCADO'
-                };
-
-                await acionamentoRef.update({
-                    status: 'RECURSO_ALOCADO',
-                    data_alocacao: new Date().toISOString(),
-                    alocado_por: currentUser.username,
-                    equipe: equipe,
-                    historico_status: [...historicoAtual, novoHistorico]
-                });
-                
-                closeEditModal();
-                loadAcionamentos();
-                
-                alert('Recurso alocado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao alocar recurso:', error);
-                alert('Erro ao alocar recurso.');
-            }
-        }
-
-        // Função para finalizar acionamento
-        async function finalizarAcionamento() {
-            try {
-                const id = document.getElementById('editId').value;
-                
-                const acionamentoRef = db.collection('acionamentos').doc(id);
-                const doc = await acionamentoRef.get();
-                const historicoAtual = doc.exists ? doc.data().historico_status || [] : [];
-
-                const agora = new Date();
-                const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
-                    usuario: currentUser.username,
-                    acao: 'Acionamento finalizado',
-                    status_anterior: 'RECURSO_ALOCADO',
-                    status_novo: 'FINALIZADO'
-                };
-
-                await acionamentoRef.update({
-                    status: 'FINALIZADO',
-                    data_finalizacao: new Date().toISOString(),
-                    finalizado_por: currentUser.username,
-                    historico_status: [...historicoAtual, novoHistorico]
-                });
-                
-                closeEditModal();
-                loadAcionamentos();
-                
-                alert('Acionamento finalizado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao finalizar:', error);
-                alert('Erro ao finalizar acionamento.');
-            }
-        }
-
-        // Função para carregar dashboard
-        function loadDashboard() {
-            // Atualizar KPIs
-            const pendentes = acionamentos.filter(a => a.status === 'PENDENTE').length;
-            const enviados = acionamentos.filter(a => a.status === 'ENVIADO').length;
-            const recurso = acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length;
-            const finalizados = acionamentos.filter(a => a.status === 'FINALIZADO').length;
-            
-            document.getElementById('kpiPendentes').textContent = pendentes;
-            document.getElementById('kpiEnviados').textContent = enviados;
-            document.getElementById('kpiRecurso').textContent = recurso;
-            document.getElementById('kpiFinalizados').textContent = finalizados;
-            document.getElementById('kpiTodos').textContent = acionamentos.length;
-            
-            // Criar gráficos
-            createCharts();
         }
 
         // Função para filtrar por status
         function filterByStatus(status) {
+            console.log('Filtrando por status:', status);
             currentFilter = status;
             
-            // Atualizar KPIs ativos
+            // Remover classe active de todos os KPI cards
             document.querySelectorAll('.kpi-card').forEach(card => {
                 card.classList.remove('active');
             });
-            document.querySelector(`[data-status="${status}"]`).classList.add('active');
             
-            // Atualizar gráficos
+            // Adicionar classe active ao card correspondente
+            if (status !== 'TODOS') {
+                const card = document.querySelector(`[data-status="${status}"]`);
+                if (card) card.classList.add('active');
+            }
+            
+            displayAcionamentos();
+        }
+
+        // Função para carregar acionamentos (simulação com dados de exemplo)
+        function loadAcionamentos() {
+            console.log('Carregando acionamentos...');
+            
+            // Simular dados para demonstração
+            acionamentos = [
+                {
+                    id: '1',
+                    numero: 'AC001',
+                    equipe: 'EQUIPE_01',
+                    tipoDefeito: 'CABO_ROMPIDO',
+                    alimentador: 'ALM001',
+                    referencia: 'Rua A, 123',
+                    clientesInterrompidos: 150,
+                    dataCriacao: new Date('2024-01-15T08:30:00'),
+                    dataAcionamento: new Date('2024-01-15T09:00:00'),
+                    status: 'PENDENTE'
+                },
+                {
+                    id: '2',
+                    numero: 'AC002',
+                    equipe: 'EQUIPE_02',
+                    tipoDefeito: 'TRANSFORMADOR_QUEIMADO',
+                    alimentador: 'ALM002',
+                    referencia: 'Rua B, 456',
+                    clientesInterrompidos: 300,
+                    dataCriacao: new Date('2024-01-15T10:15:00'),
+                    dataAcionamento: new Date('2024-01-15T10:45:00'),
+                    status: 'ENVIADO'
+                },
+                {
+                    id: '3',
+                    numero: 'AC003',
+                    equipe: 'EQUIPE_03',
+                    tipoDefeito: 'POSTE_CAIDO',
+                    alimentador: 'ALM003',
+                    referencia: 'Rua C, 789',
+                    clientesInterrompidos: 75,
+                    dataCriacao: new Date('2024-01-15T11:00:00'),
+                    dataAcionamento: new Date('2024-01-15T11:30:00'),
+                    status: 'RECURSO_ALOCADO'
+                },
+                {
+                    id: '4',
+                    numero: 'AC004',
+                    equipe: 'EQUIPE_04',
+                    tipoDefeito: 'CABO_ROMPIDO',
+                    alimentador: 'ALM004',
+                    referencia: 'Rua D, 321',
+                    clientesInterrompidos: 200,
+                    dataCriacao: new Date('2024-01-14T14:20:00'),
+                    dataAcionamento: new Date('2024-01-14T14:50:00'),
+                    status: 'FINALIZADO'
+                }
+            ];
+            
+            console.log('Acionamentos carregados:', acionamentos.length);
+            updateKPIs();
+            displayAcionamentos();
             updateCharts();
         }
 
-        // Função para criar gráficos
-        function createCharts() {
-            // Destruir gráficos existentes
-            Object.values(charts).forEach(chart => {
-                if (chart) chart.destroy();
+        // Função para atualizar KPIs
+        function updateKPIs() {
+            const pendentes = acionamentos.filter(a => a.status === 'PENDENTE').length;
+            const enviados = acionamentos.filter(a => a.status === 'ENVIADO').length;
+            const recurso = acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length;
+            const finalizados = acionamentos.filter(a => a.status === 'FINALIZADO').length;
+            const todos = acionamentos.length;
+            
+            // Atualizar elementos se existirem
+            const elements = {
+                'kpiPendentes': pendentes,
+                'kpiEnviados': enviados,
+                'kpiRecurso': recurso,
+                'kpiFinalizados': finalizados,
+                'kpiTodos': todos,
+                'pendentesCount': pendentes,
+                'enviadosCount': enviados,
+                'recursoCount': recurso,
+                'finalizadasCount': finalizados,
+                'todasCount': todos
+            };
+            
+            Object.entries(elements).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
             });
             
-            // Gráfico de tempo médio de atendimento
-            const ctx1 = document.getElementById('tempoAtendimentoChart').getContext('2d');
-            charts.tempoAtendimento = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
-                    datasets: [{
-                        label: 'Tempo Médio (horas)',
-                        data: getTempoMedioData(),
-                        backgroundColor: '#fb8c00'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        datalabels: {
-                            display: true,
-                            color: '#000',
-                            font: {
-                                weight: 'bold'
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return value + 'h';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+            console.log('KPIs atualizados:', elements);
+        }
 
-            // Gráfico de tempo por status
-            const ctx2 = document.getElementById('tempoStatusChart').getContext('2d');
-            charts.tempoStatus = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Pendente', 'Enviado', 'Com Recurso', 'Finalizado'],
-                    datasets: [{
-                        data: getTempoStatusData(),
-                        backgroundColor: ['#fff3cd', '#d1ecf1', '#d4edda', '#f8d7da']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        },
-                        datalabels: {
-                            display: true,
-                            color: '#000',
-                            font: {
-                                weight: 'bold'
-                            },
-                            formatter: function(value, context) {
-                                return value > 0 ? value : '';
-                            }
-                        }
-                    }
-                }
-            });
+        // Função para exibir acionamentos
+        function displayAcionamentos() {
+            const filteredData = currentFilter === 'TODOS' 
+                ? acionamentos 
+                : acionamentos.filter(a => a.status === currentFilter);
+            
+            const tableBody = document.getElementById('acionamentosTableBody');
+            const loadingState = document.getElementById('loadingState');
+            const emptyState = document.getElementById('emptyState');
+            const tableContainer = document.getElementById('tableContainer');
+            const cardCount = document.getElementById('cardCount');
+            
+            // Ocultar loading
+            if (loadingState) loadingState.classList.add('d-none');
+            
+            // Atualizar contador
+            if (cardCount) {
+                cardCount.textContent = `${filteredData.length} acionamento${filteredData.length !== 1 ? 's' : ''}`;
+            }
+            
+            if (filteredData.length === 0) {
+                if (emptyState) emptyState.classList.remove('d-none');
+                if (tableContainer) tableContainer.classList.add('d-none');
+                return;
+            }
+            
+            if (emptyState) emptyState.classList.add('d-none');
+            if (tableContainer) tableContainer.classList.remove('d-none');
+            
+            // Limpar e popular tabela
+            if (tableBody) {
+                tableBody.innerHTML = '';
+                
+                filteredData.forEach(acionamento => {
+                    const row = createTableRow(acionamento);
+                    tableBody.appendChild(row);
+                });
+            }
+            
+            console.log('Acionamentos exibidos:', filteredData.length);
+        }
 
-            // Gráfico por tipo de equipe
-            const ctx3 = document.getElementById('tipoEquipeChart').getContext('2d');
-            charts.tipoEquipe = new Chart(ctx3, {
-                type: 'pie',
-                data: {
-                    labels: ['Pesada', 'Poda', 'Linha Viva', 'Leve'],
-                    datasets: [{
-                        data: getTipoEquipeData(),
-                        backgroundColor: ['#ff9800', '#4caf50', '#2196f3', '#f44336']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        },
-                        datalabels: {
-                            display: true,
-                            color: '#fff',
-                            font: {
-                                weight: 'bold'
-                            },
-                            formatter: function(value, context) {
-                                return value > 0 ? value : '';
-                            }
-                        }
-                    }
-                }
-            });
+        // Função para criar linha da tabela
+        function createTableRow(acionamento) {
+            const row = document.createElement('tr');
+            
+            const tempoDesdeCreacao = calculateTimeDifference(acionamento.dataCriacao);
+            const tempoDesdeAcionamento = calculateTimeDifference(acionamento.dataAcionamento);
+            
+            const statusClass = `status-${acionamento.status.toLowerCase()}`;
+            const statusText = {
+                'PENDENTE': 'Pendente',
+                'ENVIADO': 'Enviado',
+                'RECURSO_ALOCADO': 'Recurso Alocado',
+                'FINALIZADO': 'Finalizado'
+            }[acionamento.status] || acionamento.status;
+            
+            row.innerHTML = `
+                <td>${acionamento.numero}</td>
+                <td>${acionamento.equipe.replace('_', ' ')}</td>
+                <td>${acionamento.tipoDefeito.replace(/_/g, ' ')}</td>
+                <td>${acionamento.alimentador}</td>
+                <td>${acionamento.referencia}</td>
+                <td>${acionamento.clientesInterrompidos}</td>
+                <td>${tempoDesdeCreacao}</td>
+                <td>${tempoDesdeAcionamento}</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td>${formatDate(acionamento.dataCriacao)}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="viewDetails('${acionamento.id}')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            `;
+            
+            return row;
+        }
+
+        // Função para calcular diferença de tempo
+        function calculateTimeDifference(date) {
+            const now = new Date();
+            const diff = now - date;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else {
+                return `${minutes}m`;
+            }
+        }
+
+        // Função para formatar data
+        function formatDate(date) {
+            return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Função para ver detalhes
+        function viewDetails(id) {
+            const acionamento = acionamentos.find(a => a.id === id);
+            if (acionamento) {
+                alert(`Detalhes do acionamento ${acionamento.numero}:\n\nEquipe: ${acionamento.equipe}\nStatus: ${acionamento.status}\nReferência: ${acionamento.referencia}`);
+            }
         }
 
         // Função para atualizar gráficos
         function updateCharts() {
-            if (charts.tempoAtendimento) {
-                charts.tempoAtendimento.data.datasets[0].data = getTempoMedioData();
-                charts.tempoAtendimento.update();
-            }
-            
-            if (charts.tempoStatus) {
-                charts.tempoStatus.data.datasets[0].data = getTempoStatusData();
-                charts.tempoStatus.update();
-            }
-            
-            if (charts.tipoEquipe) {
-                charts.tipoEquipe.data.datasets[0].data = getTipoEquipeData();
-                charts.tipoEquipe.update();
-            }
-        }
-
-        // Função para obter dados de tempo médio
-        function getTempoMedioData() {
-            let filteredData = acionamentos.filter(a => a.data_acionamento && a.data_alocacao_turma);
-            
-            if (currentFilter !== 'TODOS') {
-                filteredData = filteredData.filter(a => a.status === currentFilter);
-            }
-            
-            if (filteredData.length === 0) return [0];
-
-            let totalDuration = 0;
-            filteredData.forEach(acionamento => {
-                const inicio = new Date(acionamento.data_acionamento);
-                const fim = new Date(acionamento.data_alocacao_turma);
-                const diffMs = fim - inicio;
-                totalDuration += diffMs;
-            });
-
-            const averageMs = totalDuration / filteredData.length;
-            const averageHours = averageMs / (1000 * 60 * 60);
-            
-            return [parseFloat(averageHours.toFixed(2))];
-        }
-
-        // Função para obter dados de tempo por status
-        function getTempoStatusData() {
-            if (currentFilter === 'TODOS') {
-                return [
-                    acionamentos.filter(a => a.status === 'PENDENTE').length,
-                    acionamentos.filter(a => a.status === 'ENVIADO').length,
-                    acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length,
-                    acionamentos.filter(a => a.status === 'FINALIZADO').length
-                ];
-            } else {
-                // Para filtro específico, mostrar distribuição temporal
-                const filtered = acionamentos.filter(a => a.status === currentFilter);
-                const total = filtered.length;
-                return [total * 0.3, total * 0.25, total * 0.25, total * 0.2];
-            }
-        }
-
-        // Função para obter dados por tipo de equipe
-        function getTipoEquipeData() {
-            let filteredData = acionamentos;
-            
-            if (currentFilter !== 'TODOS') {
-                filteredData = acionamentos.filter(a => a.status === currentFilter);
-            }
-            
-            const pesada = filteredData.filter(a => a.tipo_equipe?.includes('PESADA')).length;
-            const poda = filteredData.filter(a => a.tipo_equipe?.includes('PODA')).length;
-            const linhaViva = filteredData.filter(a => a.tipo_equipe?.includes('LINHA_VIVA')).length;
-            const leve = filteredData.filter(a => a.tipo_equipe === 'LEVE').length;
-            
-            return [pesada, poda, linhaViva, leve];
+            console.log('Atualizando gráficos...');
+            // Implementar gráficos aqui se necessário
         }
 
         // Função para exportar para Excel
         function exportToExcel() {
-            try {
-                // Filtrar dados baseado na seção atual e permissões
-                let dataToExport = acionamentos;
-                
-                if (currentStatus !== 'TODAS_OCORRENCIAS' && currentStatus !== 'DASHBOARD') {
-                    const statusMap = {
-                        'ACIONAMENTOS_PENDENTES': 'PENDENTE',
-                        'ACIONAMENTOS_ENVIADOS': 'ENVIADO',
-                        'COM_RECURSO_ALOCADO': 'RECURSO_ALOCADO',
-                        'OCORRENCIAS_FINALIZADAS': 'FINALIZADO'
-                    };
-                    dataToExport = acionamentos.filter(a => a.status === statusMap[currentStatus]);
-                } else {
-                    // Para ADMIN2, filtrar acionamentos pendentes
-                    if (currentUser.role === 'admin2') {
-                        dataToExport = acionamentos.filter(a => a.status !== 'PENDENTE');
-                    }
-                }
-                
-                // Função auxiliar para extrair dados do histórico por status
-                function getHistoricoByStatus(historico, status) {
-                    if (!historico || !Array.isArray(historico)) return { data: '', hora: '', usuario: '' };
-                    
-                    const entrada = historico.find(h => h.status_novo === status);
-                    return entrada ? {
-                        data: entrada.data || '',
-                        hora: entrada.hora || '',
-                        usuario: entrada.usuario || ''
-                    } : { data: '', hora: '', usuario: '' };
-                }
-                
-                // Preparar dados para exportação
-                const exportData = dataToExport.map(acionamento => {
-                    const historico = acionamento.historico_status || [];
-                    
-                    // Extrair dados do histórico para cada status
-                    const pendente = getHistoricoByStatus(historico, 'PENDENTE');
-                    const enviado = getHistoricoByStatus(historico, 'ENVIADO');
-                    const recursoAlocado = getHistoricoByStatus(historico, 'RECURSO_ALOCADO');
-                    const finalizado = getHistoricoByStatus(historico, 'FINALIZADO');
-                    
-                    return {
-                        'Número da Ocorrência': acionamento.numero_ocorrencia || acionamento.id,
-                        'Data de Criação': acionamento.data_criacao_ocorrencia || '',
-                        'Horário de Criação': acionamento.horario_criacao_ocorrencia || '',
-                        'Equipe': acionamento.equipe || '',
-                        'Tipo de Equipe': acionamento.tipo_equipe || '',
-                        'Tipo de Defeito': acionamento.tipo_defeito || '',
-                        'Alimentador': acionamento.alimentador || '',
-                        'Tipo de Referência': acionamento.tipo_referencia || '',
-                        'Número da Referência': acionamento.numero_referencia || '',
-                        'Clientes Interrompidos': acionamento.clientes_interrompidos || '',
-                        'Relatório da Ocorrência': acionamento.relatorio_ocorrencia || '',
-                        'Materiais Necessários': acionamento.materiais_necessarios || '',
-                        'Status': getStatusLabel(acionamento.status),
-                        
-                        // Colunas do histórico de status
-                        'Data Pendente': pendente.data,
-                        'Hora Pendente': pendente.hora,
-                        'Usuário Pendente': pendente.usuario,
-                        
-                        'Data Enviado': enviado.data,
-                        'Hora Enviado': enviado.hora,
-                        'Usuário Enviado': enviado.usuario,
-                        
-                        'Data Com Recurso Alocado': recursoAlocado.data,
-                        'Hora Com Recurso Alocado': recursoAlocado.hora,
-                        'Usuário Com Recurso Alocado': recursoAlocado.usuario,
-                        
-                        'Data Finalizado': finalizado.data,
-                        'Hora Finalizado': finalizado.hora,
-                        'Usuário Finalizado': finalizado.usuario,
-                        
-                        // Colunas originais mantidas para compatibilidade
-                        'Data de Acionamento': formatarData(acionamento.data_acionamento) || '',
-                        'Data de Envio': formatarData(acionamento.data_envio) || '',
-                        'Data de Alocação da Turma': formatarData(acionamento.data_alocacao_turma) || '',
-                        'Data de Finalização da Ocorrência': formatarData(acionamento.data_finalizacao) || '',
-                        'Tempo desde Criação': calcularTempoDecorrido(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia, acionamento.data_finalizacao, acionamento.hora_finalizacao),
-                        'Tempo desde Acionamento': calcularTempoDecorrido(acionamento.data_acionamento, null, acionamento.data_finalizacao, acionamento.hora_finalizacao),
-                        'Validado por': acionamento.validado_por || '',
-                        'Alocado por': acionamento.alocado_por || '',
-                        'Finalizado por': acionamento.finalizado_por || ''
-                    };
-                });
-                
-                // Criar workbook
-                const ws = XLSX.utils.json_to_sheet(exportData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'Acionamentos');
-                
-                // Gerar nome do arquivo
-                const now = new Date();
-                const fileName = `acionamentos_${now.getFullYear()}_${(now.getMonth() + 1).toString().padStart(2, '0')}_${now.getDate().toString().padStart(2, '0')}.xlsx`;
-                
-                // Fazer download
-                XLSX.writeFile(wb, fileName);
-                
-                alert('Relatório Excel exportado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao exportar Excel:', error);
-                alert('Erro ao exportar relatório Excel.');
+            if (typeof XLSX === 'undefined') {
+                alert('Biblioteca de exportação não carregada. Tente novamente.');
+                return;
             }
+            
+            const filteredData = currentFilter === 'TODOS' 
+                ? acionamentos 
+                : acionamentos.filter(a => a.status === currentFilter);
+            
+            const ws = XLSX.utils.json_to_sheet(filteredData.map(a => ({
+                'Número': a.numero,
+                'Equipe': a.equipe,
+                'Tipo Defeito': a.tipoDefeito,
+                'Alimentador': a.alimentador,
+                'Referência': a.referencia,
+                'Clientes Interrompidos': a.clientesInterrompidos,
+                'Status': a.status,
+                'Data Criação': formatDate(a.dataCriacao),
+                'Data Acionamento': formatDate(a.dataAcionamento)
+            })));
+            
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Acionamentos');
+            
+            const filename = `acionamentos_${currentFilter.toLowerCase()}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, filename);
         }
 
-        // Funções para mobile
+        // Função para toggle do sidebar mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             
-            sidebar.classList.toggle('show');
-            overlay.classList.toggle('show');
+            if (sidebar) sidebar.classList.toggle('show');
+            if (overlay) overlay.classList.toggle('show');
         }
 
-        function closeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            
-            sidebar.classList.remove('show');
-            overlay.classList.remove('show');
-        }
-
-        // Carregar acionamentos inicialmente
-        if (firebaseInitialized) {
-            loadAcionamentos();
-        }
+        // Carregar dados iniciais quando a aplicação for mostrada
+        window.addEventListener('load', function() {
+            console.log('Página carregada completamente');
+            updateDebugInfo();
+        });
     </script>
 </body>
 </html>
