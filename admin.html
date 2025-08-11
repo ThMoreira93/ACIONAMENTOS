@@ -1430,7 +1430,47 @@
         let charts = {};
         let currentTableData = []; // Para armazenar os dados atuais da tabela
         let originalAcionamento = null; // snapshot antes de editar para calcular diffs
-        function applyMenuPermissions() {
+
+
+// === Autenticação Firebase & Perfis ===
+async function resolveUserRole(firebaseUser) {
+    if (!firebaseUser) return null;
+    const email = firebaseUser.email || '';
+    let roleInfo = null;
+
+    try {
+        // Tenta ADMIN1 (usuarioclb)
+        let snap = await db.collection('usuarioclb').where('email', '==', email).limit(1).get();
+        if (!snap.empty) {
+            const doc = snap.docs[0];
+            const data = doc.data();
+            roleInfo = {
+                username: data.matricula || doc.id || email,
+                role: 'admin1',
+                name: data.nome || data.name || email,
+                email
+            };
+        } else {
+            // Tenta ADMIN2 (usuarioeps)
+            snap = await db.collection('usuarioeps').where('email', '==', email).limit(1).get();
+            if (!snap.empty) {
+                const doc = snap.docs[0];
+                const data = doc.data();
+                roleInfo = {
+                    username: data.matricula || doc.id || email,
+                    role: 'admin2',
+                    name: data.nome || data.name || email,
+                    email
+                };
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao obter perfil/role:', e);
+    }
+    return roleInfo;
+}
+
+function applyMenuPermissions() {
     const menuItems = document.querySelectorAll('.menu-item');
     menuItems.forEach(item => {
         const section = item.getAttribute('data-section');
@@ -1469,55 +1509,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Observa sessão do Firebase
         
-
 firebase.auth().onAuthStateChanged(async (user) => {
         if (user) {
-            const loginErrorDiv = document.getElementById('loginError');
-            const email = (user.email || '').toLowerCase();
-            if (!email.endsWith('@gacio.com')) {
-                if (loginErrorDiv) {
-                    loginErrorDiv.textContent = 'Acesso restrito a contas @GACIO.COM.';
-                    loginErrorDiv.classList.remove('d-none');
-                }
-                await firebase.auth().signOut();
-                document.getElementById('loginScreen').classList.remove('d-none');
-                document.getElementById('mainApp').classList.add('d-none');
-                return;
-            }
-
-            // Descobrir role no Firestore
-            const info = await resolveUserRole(user);
-            if (!info) {
-                if (loginErrorDiv) {
-                    loginErrorDiv.textContent = 'Seu e-mail está autenticado, mas não possui permissão no sistema. Verifique se sua matrícula/e-mail está cadastrada em usuarioclb/usuarioeps.';
-                    loginErrorDiv.classList.remove('d-none');
-                }
-                await firebase.auth().signOut();
-                document.getElementById('loginScreen').classList.remove('d-none');
-                document.getElementById('mainApp').classList.add('d-none');
-                return;
-            }
-            currentUser = info;
-            setUIForUser();
-
-            // Mostrar app
-            document.getElementById('loginScreen').classList.add('d-none');
-            document.getElementById('mainApp').classList.remove('d-none');
-
-            // Se admin2 começa em enviados, senão dashboard
-            if (currentUser.role === 'admin2') {
-                showSection('acionamentos_enviados');
-            } else {
-                showSection('dashboard');
-            }
-            setTimeout(() => loadAcionamentos(), 500);
-        } else {
-            currentUser = null;
-            document.getElementById('loginScreen').classList.remove('d-none');
-            document.getElementById('mainApp').classList.add('d-none');
-        }
-    });
-
             const email = (user.email || '').toLowerCase();
             if (!email.endsWith('@gacio.com')) {
                 alert('Acesso restrito a contas @GACIO.COM.');
