@@ -774,8 +774,19 @@
             color: #721c24;
         }
 
+        .status-cancelado {
+            background: #eeeeee;
+            color: #555555;
+        }
+
+        /* Modal */
+            background: #f8d7da;
+            color: #721c24;
+        }
+
         /* Modal */
         .modal {
+            display: none;
             position: fixed;
             top: 0;
             left: 0;
@@ -794,11 +805,19 @@
         }
 
         .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            display: flex;
             opacity: 1;
             visibility: visible;
         }
 
         .modal-content {
+            position: relative;
+            width: 100%;
+            max-width: 850px;
+            position: relative;
             background: white;
             border-radius: 16px;
             width: 100%;
@@ -811,6 +830,7 @@
         }
 
         .modal.show .modal-content {
+            position: relative;
             transform: translateY(0);
         }
 
@@ -856,6 +876,9 @@
         }
 
         .modal-footer {
+            position: sticky;
+            bottom: 0;
+            background: white;
             padding: 1.5rem 1.75rem;
             border-top: 1px solid var(--neutral-200);
             display: flex;
@@ -908,6 +931,31 @@
 
         /* Responsividade */
         @media (max-width: 992px) {
+            .modal {
+                align-items: center;
+                justify-content: center;
+                padding: 1rem;
+            }
+            .modal-content {
+                width: 96vw;
+                max-width: 96vw;
+                margin: 0 auto;
+                border-radius: 12px;
+            }
+            .modal {
+            display: none;
+                align-items: flex-start;
+                padding-top: 0.75rem;
+            }
+            .modal-content {
+            position: relative;
+            width: 100%;
+            max-width: 850px;
+                width: 96vw;
+                max-width: 96vw;
+                margin: 0 auto;
+                border-radius: 12px;
+            }
             .sidebar {
                 transform: translateX(-100%);
                 width: 280px;
@@ -942,6 +990,10 @@
             }
 
             .modal-content {
+            position: relative;
+            width: 100%;
+            max-width: 850px;
+            position: relative;
                 margin: 1rem;
                 max-height: calc(100vh - 2rem);
             }
@@ -979,6 +1031,31 @@
         }
 
         @media (max-width: 992px) {
+            .modal {
+                align-items: center;
+                justify-content: center;
+                padding: 1rem;
+            }
+            .modal-content {
+                width: 96vw;
+                max-width: 96vw;
+                margin: 0 auto;
+                border-radius: 12px;
+            }
+            .modal {
+            display: none;
+                align-items: flex-start;
+                padding-top: 0.75rem;
+            }
+            .modal-content {
+            position: relative;
+            width: 100%;
+            max-width: 850px;
+                width: 96vw;
+                max-width: 96vw;
+                margin: 0 auto;
+                border-radius: 12px;
+            }
             .mobile-menu-toggle {
                 display: block;
             }
@@ -1009,7 +1086,41 @@
                 display: none;
             }
         }
-    </style>
+    
+/* === Overrides: modal centralizado e mais largo === */
+.modal { 
+    display: none; 
+    position: fixed; 
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    align-items: center; 
+    justify-content: center; 
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s;
+    padding: 1rem;
+    backdrop-filter: blur(5px);
+}
+.modal.show { 
+    display: flex; 
+    opacity: 1; 
+    visibility: visible; 
+    align-items: center; 
+    justify-content: center; 
+}
+.modal-content { 
+    width: 90vw; 
+    max-width: 1100px; 
+    margin: 0 auto; 
+    border-radius: 16px;
+}
+@media (max-width: 992px) {
+    .modal-content { width: 96vw; max-width: 96vw; }
+}
+/* === Fim overrides === */
+
+</style>
 </head>
 <body>
     <!-- Tela de Login -->
@@ -1389,11 +1500,22 @@
                 <button type="button" id="validarBtn" class="btn btn-success" onclick="validarAcionamento()">Validar</button>
                 <button type="button" id="alocarBtn" class="btn btn-primary" onclick="alocarRecurso()">Alocar Recurso</button>
                 <button type="button" id="finalizarBtn" class="btn btn-success" onclick="finalizarAcionamento()">Finalizar</button>
+                <button type="button" id="retroagirBtn" class="btn btn-secondary" onclick="retroagirStatus()">Retroagir Status</button>
+                <button type="button" id="cancelarBtn" class="btn btn-secondary" onclick="cancelarAcionamento()">Cancelar acionamento</button>
             </div>
-        </div>
     </div>
 
     <script>
+        // Fechar ao clicar fora do conteúdo
+        (function() {
+            const modal = document.getElementById('editModal');
+            if (modal) {
+                modal.addEventListener('click', function(e){
+                    if (e.target === modal) closeEditModal();
+                });
+            }
+        })();
+
         // Configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyCv7vfGMSobE1n0M1CECl46LdMy3pdrxh4",
@@ -1416,10 +1538,9 @@
                 }
                 db = firebase.firestore();
                 auth = firebase.auth();
-                
-                // Garantir persistência LOCAL por 30min mesmo após reload
+                // Persistência local para manter login após reload
                 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
-firebaseInitialized = true;
+                firebaseInitialized = true;
                 console.log('Firebase inicializado com sucesso no admin');
             } catch (error) {
                 console.error('Erro ao inicializar Firebase no admin:', error);
@@ -1440,17 +1561,21 @@ firebaseInitialized = true;
 
         // Inicializar aplicação
         document.addEventListener('DOMContentLoaded', () => {
+            try { document.getElementById('editModal').classList.remove('show'); } catch(e){}
             // Registrar plugin datalabels
             Chart.register(ChartDataLabels);
             
             initializeFirebase();
-            
-            // Tentar restaurar sessão antes de esperar o Auth
+            // Restaurar sessão imediatamente se válida
             if (checkSession()) {
-                // Já tem sessão válida em localStorage
                 if (currentUser.role === 'admin2') { showSection('acionamentos_enviados'); } else { showSection('dashboard'); }
                 loadAcionamentos();
             }
+            
+            
+        // Keep-alive da sessão em qualquer interação
+        document.addEventListener('click', resetSessionTimeout, true);
+        document.addEventListener('keydown', resetSessionTimeout, true);
 
             // Configurar formulário de login
             document.getElementById('loginForm').addEventListener('submit', handleLogin);
@@ -1458,16 +1583,15 @@ firebaseInitialized = true;
             // Verificar se usuário já está logado
             auth.onAuthStateChanged(user => {
                 if (user) {
-                    // Usuário já está autenticado
                     const email = user.email;
                     const username = email.split('@')[0];
-                    
-                    // Determinar tipo de usuário e buscar dados
                     determineUserRole(username);
                 } else {
-                    // Nenhum usuário logado
-                    document.getElementById('loginScreen').classList.remove('d-none');
-                    document.getElementById('mainApp').classList.add('d-none');
+                    // Só mostra login se não houver sessão válida no localStorage
+                    if (!checkSession()) {
+                        document.getElementById('loginScreen').classList.remove('d-none');
+                        document.getElementById('mainApp').classList.add('d-none');
+                    }
                 }
             });
             
@@ -1628,6 +1752,15 @@ firebaseInitialized = true;
 
         // Função para resetar timeout de sessão
         function resetSessionTimeout() {
+            // Atualiza timestamp no localStorage a cada interação para manter a sessão viva
+            try {
+                const sessionData = localStorage.getItem('clb_session');
+                if (sessionData) {
+                    const s = JSON.parse(sessionData);
+                    s.timestamp = Date.now();
+                    localStorage.setItem('clb_session', JSON.stringify(s));
+                }
+            } catch (e) {}
             if (sessionTimeout) {
                 clearTimeout(sessionTimeout);
             }
@@ -1660,6 +1793,7 @@ firebaseInitialized = true;
 
         // Função para mostrar seção
         function showSection(section) {
+            closeEditModal();
             // Resetar timeout de sessão em qualquer atividade
             resetSessionTimeout();
             
@@ -1714,6 +1848,8 @@ firebaseInitialized = true;
 
         // Função para carregar acionamentos
         async function loadAcionamentos() {
+            // garantir modal fechado antes de recarregar tabela
+            closeEditModal();
             if (!firebaseInitialized) {
                 console.log('Firebase não inicializado');
                 return;
@@ -1748,7 +1884,7 @@ firebaseInitialized = true;
                 } else {
                     // Para ADMIN2, filtrar acionamentos pendentes em "todas as ocorrências"
                     if (currentUser.role === 'admin2') {
-                        filteredAcionamentos = acionamentos.filter(a => a.status !== 'PENDENTE');
+                        filteredAcionamentos = acionamentos.filter(a => a.status !== 'PENDENTE' && a.status !== 'CANCELADO');
                     }
                 }
                 
@@ -1960,7 +2096,8 @@ firebaseInitialized = true;
                 'PENDENTE': 'Pendente',
                 'ENVIADO': 'Enviado',
                 'RECURSO_ALOCADO': 'Com Recurso',
-                'FINALIZADO': 'Finalizado'
+                'FINALIZADO': 'Finalizado',
+                'CANCELADO': 'Cancelado'
             };
             return labels[status] || 'Pendente';
         }
@@ -1999,32 +2136,14 @@ firebaseInitialized = true;
             document.getElementById('editRelatorio').value = acionamento.relatorio_ocorrencia || '';
             document.getElementById('editMateriais').value = acionamento.materiais_necessarios || '';
 
-                        // Exibir histórico
+            // Exibir histórico
             const historicoContainer = document.getElementById('historicoContainer');
             historicoContainer.innerHTML = '';
             if (acionamento.historico && acionamento.historico.length > 0) {
                 acionamento.historico.forEach(entry => {
-                    const p = document.createElement('div');
-                    const dt = entry.dataHora || (entry.data ? (entry.data + (entry.hora ? ('T' + entry.hora + ':00') : 'T00:00:00')) : null);
-                    let dtText = 'Data/Hora não informada';
-                    if (dt) {
-                        const d = new Date(dt);
-                        if (!isNaN(d.getTime())) {
-                            dtText = d.toLocaleString('pt-BR');
-                        }
-                    }
-                    const usuario = entry.usuario || 'Usuário';
-                    const acao = entry.acao || '';
-                    let header = `<strong>${dtText}</strong> - ${usuario}: ${acao}`;
-                    let changesHtml = '';
-                    if (entry.changes && entry.changes.length) {
-                        changesHtml = '<ul style="margin:0.35rem 0 0.75rem 1rem;">' + entry.changes.map(ch => {
-                            const de = (ch.de === null || ch.de === undefined || ch.de === '') ? '(vazio)' : String(ch.de);
-                            const para = (ch.para === null || ch.para === undefined || ch.para === '') ? '(vazio)' : String(ch.para);
-                            return `<li><em>${ch.label || ch.campo}:</em> ${de} → ${para}</li>`;
-                        }).join('') + '</ul>';
-                    }
-                    p.innerHTML = header + changesHtml;
+                    const p = document.createElement('p');
+                    const date = new Date(entry.data).toLocaleString('pt-BR');
+                    p.innerHTML = `<strong>${date}</strong> - ${entry.usuario}: ${entry.acao}`;
                     p.style.marginBottom = '0.5rem';
                     p.style.fontSize = '0.875rem';
                     historicoContainer.appendChild(p);
@@ -2071,109 +2190,180 @@ firebaseInitialized = true;
                 relatorioField.disabled = true;
                 relatorioField.classList.remove('editable-field');
             }
+            // Em mobile, rolar até o relatório, que é o campo principal nos status > PENDENTE
+            try {
+                if (window.innerWidth <= 992) {
+                    relatorioField.scrollIntoView({behavior:'smooth', block:'center'});
+                }
+            } catch(e){}
             
             // Mostrar/ocultar campo de clientes interrompidos baseado no status
             const clientesGroup = document.getElementById('clientesInterrompidosGroup');
             clientesGroup.style.display = 'block'; // Sempre mostrar para visualização
             
+            
             // Configurar botões de ação
-            document.getElementById('salvarBtn').style.display = (!isFinalizado) ? 'inline-flex' : 'none';
+            document.getElementById('salvarBtn').style.display = (!isFinalizado && status !== 'CANCELADO') ? 'inline-flex' : 'none';
             document.getElementById('validarBtn').style.display = (status === 'PENDENTE' && isAdmin1) ? 'inline-flex' : 'none';
             document.getElementById('alocarBtn').style.display = (status === 'ENVIADO') ? 'inline-flex' : 'none';
             document.getElementById('finalizarBtn').style.display = (status === 'RECURSO_ALOCADO') ? 'inline-flex' : 'none';
-            
+
+            const retroBtn = document.getElementById('retroagirBtn');
+            if (retroBtn) retroBtn.style.display = (isAdmin1 && (status === 'ENVIADO' || status === 'RECURSO_ALOCADO' || status === 'FINALIZADO')) ? 'inline-flex' : 'none';
+
+            const cancBtn = document.getElementById('cancelarBtn');
+            if (cancBtn) cancBtn.style.display = (isAdmin1 && status === 'PENDENTE') ? 'inline-flex' : 'none';
+
             // Mostrar modal
+
             document.getElementById('editModal').classList.add('show');
         }
 
+        
+        // Retroagir status (admin1)
+        async function retroagirStatus() {
+            try {
+                const id = document.getElementById('editId').value;
+                const ref = db.collection('acionamentos').doc(id);
+                const snap = await ref.get();
+                if (!snap.exists) return;
+                const dados = snap.data();
+                const atual = dados.status || 'PENDENTE';
+                let novo = atual;
+                if (atual === 'ENVIADO') novo = 'PENDENTE';
+                else if (atual === 'RECURSO_ALOCADO') novo = 'ENVIADO';
+                else if (atual === 'FINALIZADO') novo = 'RECURSO_ALOCADO';
+                else return;
+                
+                const agora = new Date();
+                const usuario = (currentUser && (currentUser.name || currentUser.username)) || 'Desconhecido';
+                const historicoEntry = {
+                    dataHora: agora.toISOString(),
+                    usuario: usuario,
+                    acao: `Retroagir status: ${atual} → ${novo}`,
+                    changes: [{ campo: 'status', label: 'Status', de: atual, para: novo }]
+                };
+                
+                await ref.update({
+                    status: novo,
+                    historico: firebase.firestore.FieldValue.arrayUnion(historicoEntry)
+                });
+                alert('Status retroagido com sucesso.');
+                closeEditModal();
+                loadAcionamentos();
+            } catch (err) {
+                console.error(err);
+                alert('Erro ao retroagir status: ' + err.message);
+            }
+        }
+
+        // Cancelar acionamento (admin1)
+        async function cancelarAcionamento() {
+            try {
+                const id = document.getElementById('editId').value;
+                const ref = db.collection('acionamentos').doc(id);
+                const snap = await ref.get();
+                if (!snap.exists) return;
+                const dados = snap.data();
+                const atual = dados.status || 'PENDENTE';
+                if (atual !== 'PENDENTE') {
+                    alert('Só é possível cancelar quando o acionamento está PENDENTE.');
+                    return;
+                }
+                const motivo = prompt('Confirme o cancelamento. Opcionalmente, informe um motivo:');
+                const agora = new Date();
+                const usuario = (currentUser && (currentUser.name || currentUser.username)) || 'Desconhecido';
+                const historicoEntry = {
+                    dataHora: agora.toISOString(),
+                    usuario: usuario,
+                    acao: 'Cancelamento de acionamento',
+                    changes: [{ campo: 'status', label: 'Status', de: atual, para: 'CANCELADO' }],
+                    motivo: motivo || null
+                };
+                await ref.update({
+                    status: 'CANCELADO',
+                    data_cancelamento: agora.toISOString(),
+                    historico: firebase.firestore.FieldValue.arrayUnion(historicoEntry)
+                });
+                alert('Acionamento cancelado.');
+                closeEditModal();
+                loadAcionamentos();
+            } catch (err) {
+                console.error(err);
+                alert('Erro ao cancelar acionamento: ' + err.message);
+            }
+        }
+
         // Função para fechar modal
+
         function closeEditModal() {
             document.getElementById('editModal').classList.remove('show');
         }
 
         // Função para salvar edição
         async function salvarEdicao() {
-    try {
-        const id = document.getElementById('editId').value;
-        const ref = db.collection('acionamentos').doc(id);
-        const snap = await ref.get();
-        const before = snap.exists ? snap.data() : {};
+            try {
+                const id = document.getElementById('editId').value;
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-        // Helpers
-        const getVal = (elId) => {
-            const el = document.getElementById(elId);
-            return el ? el.value : null;
-        };
-        const toNull = (v) => (v === '' || v === undefined ? null : v);
+                const agora = new Date();
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.name + ' (' + currentUser.username + ')',
+                    acao: 'Dados editados',
+                    detalhes: {
+                        campos_alterados: []
+                    }
+                };
 
-        // Payload sem undefined
-        const payload = {
-            data_criacao_ocorrencia: toNull(getVal('editDataCriacao')),
-            horario_criacao_ocorrencia: toNull(getVal('editHorarioCriacao')),
-            equipe: toNull(getVal('editEquipe')),
-            tipo_equipe: toNull(getVal('editTipoEquipe')),
-            tipo_defeito: toNull(getVal('editTipoDefeito')),
-            alimentador: toNull(getVal('editAlimentador')),
-            tipo_referencia: toNull(getVal('editTipoReferencia')),
-            numero_referencia: toNull(getVal('editNumeroReferencia')),
-            clientes_interrompidos: toNull(getVal('editClientesInterrompidos')),
-            materiais_necessarios: toNull(getVal('editMateriais')),
-            relatorio_ocorrencia: toNull(getVal('editRelatorio')),
-        };
-        Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k]; });
+                // Obter valores atuais para comparação
+                const dadosAtuais = doc.exists ? doc.data() : {};
+                const dadosAtualizados = {
+                    data_criacao_ocorrencia: document.getElementById('editDataCriacao').value,
+                    horario_criacao_ocorrencia: document.getElementById('editHorarioCriacao').value,
+                    equipe: document.getElementById('editEquipe').value,
+                    tipo_equipe: document.getElementById('editTipoEquipe').value,
+                    tipo_defeito: document.getElementById('editTipoDefeito').value,
+                    alimentador: document.getElementById('editAlimentador').value,
+                    tipo_referencia: document.getElementById('editTipoReferencia').value,
+                    numero_referencia: document.getElementById('editNumeroReferencia').value,
+                    clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
+                    relatorio_ocorrencia: document.getElementById('editRelatorio').value,
+                    materiais_necessarios: document.getElementById('editMateriais').value,
+                    historico: [...historicoAtual, novoHistorico]
+                };
 
-        // Calcular mudanças (antes -> depois)
-        const campoLabel = {
-            data_criacao_ocorrencia: 'Data criação',
-            horario_criacao_ocorrencia: 'Hora criação',
-            equipe: 'Equipe',
-            tipo_equipe: 'Tipo de equipe',
-            tipo_defeito: 'Tipo de defeito',
-            alimentador: 'Alimentador',
-            tipo_referencia: 'Tipo de referência',
-            numero_referencia: 'Número de referência',
-            clientes_interrompidos: 'Clientes interrompidos',
-            materiais_necessarios: 'Materiais necessários',
-            relatorio_ocorrencia: 'Relatório'
-        };
-        const changes = [];
-        Object.keys(payload).forEach((k) => {
-            const beforeVal = (before && before[k] !== undefined ? before[k] : null);
-            const afterVal  = payload[k];
-            // Só registra se mudou de fato
-            if (String(beforeVal ?? '') !== String(afterVal ?? '')) {
-                changes.push({
-                    campo: k,
-                    label: campoLabel[k] || k,
-                    de: beforeVal ?? null,
-                    para: afterVal ?? null
+                // Identificar campos alterados
+                const campos = Object.keys(dadosAtualizados);
+                campos.forEach(campo => {
+                    if (campo !== 'historico' && dadosAtuais[campo] !== dadosAtualizados[campo]) {
+                        novoHistorico.detalhes.campos_alterados.push({
+                            campo: campo,
+                            valor_anterior: dadosAtuais[campo],
+                            valor_novo: dadosAtualizados[campo]
+                        });
+                    }
                 });
+
+                // Atualizar apenas se houver alterações
+                if (novoHistorico.detalhes.campos_alterados.length > 0) {
+                    await acionamentoRef.update(dadosAtualizados);
+                    
+                    closeEditModal();
+                    loadAcionamentos();
+                    
+                    alert('Acionamento atualizado com sucesso!');
+                } else {
+                    alert('Nenhuma alteração foi feita.');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar edição:', error);
+                alert('Erro ao salvar alterações.');
             }
-        });
-
-        // Histórico com data/hora ISO
-        const agora = new Date();
-        const usuario = (currentUser && (currentUser.name || currentUser.username)) || 'Desconhecido';
-        const historicoEntry = {
-            dataHora: agora.toISOString(), // sempre válido p/ Date()
-            usuario: usuario,
-            acao: changes.length ? 'Edição de campos' : 'Edição sem alterações',
-            changes: changes
-        };
-
-        await ref.update({
-            ...payload,
-            historico: firebase.firestore.FieldValue.arrayUnion(historicoEntry),
-        });
-
-        alert('Alterações salvas com sucesso.');
-        closeEditModal();
-        loadAcionamentos();
-    } catch (err) {
-        console.error('Erro ao salvar edição:', err);
-        alert('Erro ao salvar edição: ' + (err && err.message ? err.message : err));
-    }
-}
+        }
 
         // Função para validar acionamento
         async function validarAcionamento() {
@@ -2294,22 +2484,50 @@ firebaseInitialized = true;
         }
 
         // Função para carregar dashboard
-        function loadDashboard() {
-            // Atualizar KPIs
-            const pendentes = acionamentos.filter(a => a.status === 'PENDENTE').length;
-            const enviados = acionamentos.filter(a => a.status === 'ENVIADO').length;
-            const recurso = acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length;
-            const finalizados = acionamentos.filter(a => a.status === 'FINALIZADO').length;
-            
-            document.getElementById('kpiPendentes').textContent = pendentes;
-            document.getElementById('kpiEnviados').textContent = enviados;
-            document.getElementById('kpiRecurso').textContent = recurso;
-            document.getElementById('kpiFinalizados').textContent = finalizados;
-            document.getElementById('kpiTodos').textContent = acionamentos.length;
-            
-            // Criar gráficos
-            createCharts();
-        }
+        
+function loadDashboard() {
+    try {
+        // KPIs
+        document.getElementById('kpiPendentes').textContent = acionamentos.filter(a=>a.status==='PENDENTE').length;
+        document.getElementById('kpiEnviados').textContent = acionamentos.filter(a=>a.status==='ENVIADO').length;
+        document.getElementById('kpiRecurso').textContent = acionamentos.filter(a=>a.status==='RECURSO_ALOCADO').length;
+        document.getElementById('kpiFinalizados').textContent = acionamentos.filter(a=>a.status==='FINALIZADO').length;
+        document.getElementById('kpiTodos').textContent = acionamentos.length;
+
+        const diffs = { 'Pendente → Enviado': [], 'Enviado → Recurso': [], 'Recurso → Finalizado': [] };
+
+        acionamentos.forEach(a => {
+            if (a.data_criacao_ocorrencia && a.data_criacao) {
+                const ini = a.horario_criacao_ocorrencia ? new Date(`${a.data_criacao_ocorrencia}T${a.horario_criacao_ocorrencia}`) : new Date(a.data_criacao_ocorrencia);
+                const fim = new Date(a.data_criacao);
+                const ms = fim - ini; if (!isNaN(ms) && ms >= 0) diffs['Pendente → Enviado'].push(ms);
+            }
+            if (a.data_criacao && a.data_alocacao) {
+                const ms = new Date(a.data_alocacao) - new Date(a.data_criacao);
+                if (!isNaN(ms) && ms >= 0) diffs['Enviado → Recurso'].push(ms);
+            }
+            if (a.data_alocacao && a.data_finalizacao) {
+                let fim = new Date(a.data_finalizacao);
+                if (a.hora_finalizacao) { const [hh,mm]=a.hora_finalizacao.split(':'); fim.setHours(parseInt(hh||'0'), parseInt(mm||'0')); }
+                const ms = fim - new Date(a.data_alocacao);
+                if (!isNaN(ms) && ms >= 0) diffs['Recurso → Finalizado'].push(ms);
+            }
+        });
+
+        const avgHours = (arr) => arr.length ? Math.round((arr.reduce((s,v)=>s+v,0)/arr.length)/(1000*60*60)) : 0;
+        const labels = Object.keys(diffs);
+        const values = labels.map(k => avgHours(diffs[k]));
+
+        const ctx = document.getElementById('tempoStatusChart').getContext('2d');
+        if (charts.tempoStatus) charts.tempoStatus.destroy();
+        charts.tempoStatus = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Média (h)', data: values }] },
+            options: { plugins: { datalabels: { anchor: 'end', align: 'end', formatter: (v)=> v + 'h' } }, scales: { y: { beginAtZero: true } } }
+        });
+    } catch(e){ console.error('Erro no dashboard:', e); }
+}
+
 
         // Função para filtrar por status
         function filterByStatus(status) {
