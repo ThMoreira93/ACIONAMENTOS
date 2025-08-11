@@ -18,6 +18,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
+        /* O estilo permanece exatamente como no arquivo original */
         :root {
             /* Paleta de cores laranja predominante */
             --primary-50: #fff3e0;
@@ -1024,10 +1025,10 @@
             
             <form id="loginForm">
                 <div class="form-group">
-                    <label class="form-label" for="email">
-                        <i class="fas fa-envelope"></i> E-mail
+                    <label class="form-label" for="username">
+                        <i class="fas fa-user"></i> Usuário
                     </label>
-                    <input type="text" id="email" class="form-control" placeholder="Digite seu e-mail" required>
+                    <input type="text" id="username" class="form-control" placeholder="Digite seu usuário" required>
                 </div>
                 
                 <div class="form-group">
@@ -1405,6 +1406,7 @@
 
         // Inicializar Firebase
         let db = null;
+        let auth = null;
         let firebaseInitialized = false;
 
         function initializeFirebase() {
@@ -1413,7 +1415,11 @@
                     firebase.initializeApp(firebaseConfig);
                 }
                 db = firebase.firestore();
-                firebaseInitialized = true;
+                auth = firebase.auth();
+                
+                // Garantir persistência LOCAL por 30min mesmo após reload
+                auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+firebaseInitialized = true;
                 console.log('Firebase inicializado com sucesso no admin');
             } catch (error) {
                 console.error('Erro ao inicializar Firebase no admin:', error);
@@ -1429,183 +1435,106 @@
         let currentFilter = 'TODOS';
         let charts = {};
         let currentTableData = []; // Para armazenar os dados atuais da tabela
-        let originalAcionamento = null; // snapshot antes de editar para calcular diffs
 
+        const SESSION_DURATION = 30 * 60 * 1000; // 30 minutos
 
-// === Autenticação Firebase & Perfis ===
-async function resolveUserRole(firebaseUser) {
-    if (!firebaseUser) return null;
-    const email = firebaseUser.email || '';
-    let roleInfo = null;
-
-    try {
-        // Tenta ADMIN1 (usuarioclb)
-        let snap = await db.collection('usuarioclb').where('email', '==', email).limit(1).get();
-        if (!snap.empty) {
-            const doc = snap.docs[0];
-            const data = doc.data();
-            roleInfo = {
-                username: data.matricula || doc.id || email,
-                role: 'admin1',
-                name: data.nome || data.name || email,
-                email
-            };
-        } else {
-            // Tenta ADMIN2 (usuarioeps)
-            snap = await db.collection('usuarioeps').where('email', '==', email).limit(1).get();
-            if (!snap.empty) {
-                const doc = snap.docs[0];
-                const data = doc.data();
-                roleInfo = {
-                    username: data.matricula || doc.id || email,
-                    role: 'admin2',
-                    name: data.nome || data.name || email,
-                    email
-                };
-            }
-        }
-    } catch (e) {
-        console.error('Erro ao obter perfil/role:', e);
-    }
-    return roleInfo;
-}
-
-function applyMenuPermissions() {
-    const menuItems = document.querySelectorAll('.menu-item');
-    menuItems.forEach(item => {
-        const section = item.getAttribute('data-section');
-        if (!section) return;
-        if (currentUser && currentUser.role === 'admin2') {
-            if (section === 'acionamentos_pendentes' || section === 'todas_ocorrencias') {
-                item.style.display = 'none';
-            } else {
-                item.style.display = '';
-            }
-        } else {
-            item.style.display = '';
-        }
-    });
-}
-
-function setUIForUser() {
-    if (!currentUser) return;
-    document.getElementById('userRole').textContent = currentUser.name || currentUser.email || 'Usuário';
-    document.getElementById('userCode').textContent = currentUser.username || currentUser.email || '';
-    applyMenuPermissions();
-}
-
-
-        // Sessão gerenciada pelo Firebase Auth
-// 30 minutos
-
-        // Login por Firebase Auth - hardcodes removidos
-// Inicializar aplicação
-        
-document.addEventListener('DOMContentLoaded', () => {
-        // Registrar plugin datalabels
-        Chart.register(ChartDataLabels);
-
-        initializeFirebase();
-
-        // Observa sessão do Firebase
-        
-firebase.auth().onAuthStateChanged(async (user) => {
-        if (user) {
-            const email = (user.email || '').toLowerCase();
-            if (!email.endsWith('@gacio.com')) {
-                alert('Acesso restrito a contas @GACIO.COM.');
-                await firebase.auth().signOut();
-                return;
+        // Inicializar aplicação
+        document.addEventListener('DOMContentLoaded', () => {
+            // Registrar plugin datalabels
+            Chart.register(ChartDataLabels);
+            
+            initializeFirebase();
+            
+            // Tentar restaurar sessão antes de esperar o Auth
+            if (checkSession()) {
+                // Já tem sessão válida em localStorage
+                if (currentUser.role === 'admin2') { showSection('acionamentos_enviados'); } else { showSection('dashboard'); }
+                loadAcionamentos();
             }
 
-                // Descobrir role no Firestore
-                const info = await resolveUserRole(user);
-                if (!info) {
-                    // Se não achar role, força logout e alerta
-                    alert('Seu e-mail não possui permissão no sistema. Contate o administrador.');
-                    await firebase.auth().signOut();
+            // Configurar formulário de login
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            
+            // Verificar se usuário já está logado
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    // Usuário já está autenticado
+                    const email = user.email;
+                    const username = email.split('@')[0];
+                    
+                    // Determinar tipo de usuário e buscar dados
+                    determineUserRole(username);
+                } else {
+                    // Nenhum usuário logado
                     document.getElementById('loginScreen').classList.remove('d-none');
                     document.getElementById('mainApp').classList.add('d-none');
-                    return;
                 }
-                currentUser = info;
-                setUIForUser();
-
-                // Mostrar app
-                document.getElementById('loginScreen').classList.add('d-none');
-                document.getElementById('mainApp').classList.remove('d-none');
-
-                // Se admin2 começa em enviados, senão dashboard
-                if (currentUser.role === 'admin2') {
-                    showSection('acionamentos_enviados');
-                } else {
-                    showSection('dashboard');
-                }
-                // Carregar dados iniciais
-                setTimeout(() => loadAcionamentos(), 500);
-            } else {
-                // Não logado
-                currentUser = null;
-                document.getElementById('loginScreen').classList.remove('d-none');
-                document.getElementById('mainApp').classList.add('d-none');
-            }
-        });
-
-        // Form de login por Email/Senha do Firebase
-        const form = document.getElementById('loginForm');
-        if (form) {
+            });
             
-form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('loginError');
-            errorDiv.classList.add('d-none');
-
-            const allowedDomain = 'gacio.com';
-            if (!email.toLowerCase().endsWith('@' + allowedDomain)) {
-                errorDiv.textContent = 'Use seu e-mail @GACIO.COM para acessar.';
-                errorDiv.classList.remove('d-none');
-                return;
-            }
-try {
-                    await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-                    await firebase.auth().signInWithEmailAndPassword(email, password);
-                    // onAuthStateChanged cuidará do resto
-                } catch (err) {
-                    console.error('Erro de login:', err);
-                    errorDiv.textContent = err && err.message ? err.message : 'Falha no login. Verifique e-mail e senha.';
-                    errorDiv.classList.remove('d-none');
-                }
-            });
-        }
-
-        // Menu
-        document.querySelectorAll('.menu-item[data-section]').forEach(item => {
-            item.addEventListener('click', () => {
-                const section = item.getAttribute('data-section');
-                showSection(section);
-            });
-        });
-
-        // Overlay do sidebar
-        document.getElementById('sidebarOverlay').addEventListener('click', closeSidebar);
-    });
-
+            // Configurar menu
+            document.querySelectorAll('.menu-item[data-section]').forEach(item => {
+                item.addEventListener('click', () => {
+                    const section = item.getAttribute('data-section');
+                    showSection(section);
+                });
             });
             
             // Configurar overlay do sidebar
             document.getElementById('sidebarOverlay').addEventListener('click', closeSidebar);
         });
 
-        
-// Função de login substituída pelo Firebase Auth (ver DOMContentLoaded)
-function handleLogin(event) {
-    event.preventDefault();
-    // Mantido por compatibilidade, mas não usado.
-    return false;
-}
-;
+        // Função de login
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('username').value + '@gacio.com';
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            try {
+                // Fazer login com Firebase Auth
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Extrair a matrícula do email (parte antes de '@')
+                const username = email.split('@')[0];
+                
+                // Buscar dados do usuário no Firestore
+                await determineUserRole(username);
+                
+            } catch (error) {
+                console.error('Erro no login:', error);
+                errorDiv.textContent = 'Usuário ou senha incorretos.';
+                errorDiv.classList.remove('d-none');
+            }
+        }
+
+        // Função para determinar o papel do usuário
+        async function determineUserRole(username) {
+            let userCollection = '';
+            
+            if (username.startsWith('CLB')) {
+                userCollection = 'usuarioclb';
+            } else if (username.startsWith('EPS')) {
+                userCollection = 'usuarioeps';
+            } else {
+                throw new Error('Domínio de email não suportado');
+            }
+            
+            try {
+                // Buscar o usuário na coleção correspondente
+                const userDoc = await db.collection(userCollection).doc(username).get();
+                
+                if (!userDoc.exists) {
+                    throw new Error('Usuário não encontrado na base');
+                }
+                
+                const userData = userDoc.data();
+                currentUser = {
+                    username: username,
+                    name: userData.nome,
+                    role: username.startsWith('CLB') ? 'admin1' : 'admin2'
+                };
                 
                 // Salvar sessão
                 const sessionData = {
@@ -1619,7 +1548,7 @@ function handleLogin(event) {
                 document.getElementById('userCode').textContent = currentUser.username;
                 
                 // Configurar permissões do menu
-                applyMenuPermissions();
+                setupMenuPermissions();
                 
                 // Mostrar aplicação
                 document.getElementById('loginScreen').classList.add('d-none');
@@ -1635,9 +1564,14 @@ function handleLogin(event) {
                     showSection('dashboard');
                 }
                 
-                errorDiv.classList.add('d-none');
-            } else {
-                errorDiv.classList.remove('d-none');
+                // Carregar acionamentos
+                loadAcionamentos();
+                
+            } catch (error) {
+                console.error('Erro ao obter dados do usuário:', error);
+                auth.signOut();
+                document.getElementById('loginError').textContent = 'Erro ao carregar dados do usuário.';
+                document.getElementById('loginError').classList.remove('d-none');
             }
         }
 
@@ -1657,37 +1591,78 @@ function handleLogin(event) {
             });
         }
 
-        // Verificação de sessão via onAuthStateChanged
-// Timeout de sessão removido - Firebase gerencia persistência
-sessionTimeout = setTimeout(() => {
+        // Função para verificar sessão
+        function checkSession() {
+            const sessionData = localStorage.getItem('clb_session');
+            
+            if (sessionData) {
+                const session = JSON.parse(sessionData);
+                const now = Date.now();
+                
+                // Verificar se a sessão não expirou
+                if (now - session.timestamp < SESSION_DURATION) {
+                    currentUser = session.user;
+                    
+                    // Atualizar interface
+                    document.getElementById('userRole').textContent = currentUser.name;
+                    document.getElementById('userCode').textContent = currentUser.username;
+                    
+                    // Configurar permissões do menu
+                    setupMenuPermissions();
+                    
+                    // Mostrar aplicação
+                    document.getElementById('loginScreen').classList.add('d-none');
+                    document.getElementById('mainApp').classList.remove('d-none');
+                    
+                    // Configurar timeout de sessão
+                    resetSessionTimeout();
+                    
+                    return true;
+                }
+            }
+            
+            // Limpar sessão expirada
+            localStorage.removeItem('clb_session');
+            return false;
+        }
+
+        // Função para resetar timeout de sessão
+        function resetSessionTimeout() {
+            if (sessionTimeout) {
+                clearTimeout(sessionTimeout);
+            }
+            
+            sessionTimeout = setTimeout(() => {
                 logout();
                 alert('Sua sessão expirou. Faça login novamente.');
             }, SESSION_DURATION);
         }
 
         // Função de logout
-        
-function logout() {
-    try {
-        firebase.auth().signOut();
-    } catch (e) {
-        console.error('Erro ao sair:', e);
-    }
-}
-
-            
-            document.getElementById('loginScreen').classList.remove('d-none');
-            document.getElementById('mainApp').classList.add('d-none');
-            
-            // Limpar formulário
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
-            document.getElementById('loginError').classList.add('d-none');
+        function logout() {
+            auth.signOut().then(() => {
+                currentUser = null;
+                localStorage.removeItem('clb_session');
+                
+                if (sessionTimeout) {
+                    clearTimeout(sessionTimeout);
+                }
+                
+                document.getElementById('loginScreen').classList.remove('d-none');
+                document.getElementById('mainApp').classList.add('d-none');
+                
+                // Limpar formulário
+                document.getElementById('username').value = '';
+                document.getElementById('password').value = '';
+                document.getElementById('loginError').classList.add('d-none');
+            });
         }
 
         // Função para mostrar seção
         function showSection(section) {
-                        
+            // Resetar timeout de sessão em qualquer atividade
+            resetSessionTimeout();
+            
             // Verificar permissões
             if (currentUser.role === 'admin2') {
                 if (section === 'acionamentos_pendentes' || section === 'todas_ocorrencias') {
@@ -2009,10 +1984,7 @@ function logout() {
             const acionamento = acionamentos.find(a => a.id === id);
             if (!acionamento) return;
             
-            
-            // Guardar snapshot para diffs
-            originalAcionamento = JSON.parse(JSON.stringify(acionamento));
-// Preencher formulário
+            // Preencher formulário
             document.getElementById('editId').value = id;
             document.getElementById('editNumero').value = acionamento.numero_ocorrencia || acionamento.id;
             document.getElementById('editDataCriacao').value = acionamento.data_criacao_ocorrencia || '';
@@ -2027,41 +1999,41 @@ function logout() {
             document.getElementById('editRelatorio').value = acionamento.relatorio_ocorrencia || '';
             document.getElementById('editMateriais').value = acionamento.materiais_necessarios || '';
 
+                        // Exibir histórico
+            const historicoContainer = document.getElementById('historicoContainer');
+            historicoContainer.innerHTML = '';
+            if (acionamento.historico && acionamento.historico.length > 0) {
+                acionamento.historico.forEach(entry => {
+                    const p = document.createElement('div');
+                    const dt = entry.dataHora || (entry.data ? (entry.data + (entry.hora ? ('T' + entry.hora + ':00') : 'T00:00:00')) : null);
+                    let dtText = 'Data/Hora não informada';
+                    if (dt) {
+                        const d = new Date(dt);
+                        if (!isNaN(d.getTime())) {
+                            dtText = d.toLocaleString('pt-BR');
+                        }
+                    }
+                    const usuario = entry.usuario || 'Usuário';
+                    const acao = entry.acao || '';
+                    let header = `<strong>${dtText}</strong> - ${usuario}: ${acao}`;
+                    let changesHtml = '';
+                    if (entry.changes && entry.changes.length) {
+                        changesHtml = '<ul style="margin:0.35rem 0 0.75rem 1rem;">' + entry.changes.map(ch => {
+                            const de = (ch.de === null || ch.de === undefined || ch.de === '') ? '(vazio)' : String(ch.de);
+                            const para = (ch.para === null || ch.para === undefined || ch.para === '') ? '(vazio)' : String(ch.para);
+                            return `<li><em>${ch.label || ch.campo}:</em> ${de} → ${para}</li>`;
+                        }).join('') + '</ul>';
+                    }
+                    p.innerHTML = header + changesHtml;
+                    p.style.marginBottom = '0.5rem';
+                    p.style.fontSize = '0.875rem';
+                    historicoContainer.appendChild(p);
+                });
+            } else {
+                historicoContainer.innerHTML = '<p>Nenhum histórico disponível.</p>';
+            }
             
-// Exibir histórico (usa historico_status e mostra edições de campos e mudanças de status)
-const historicoContainer = document.getElementById('historicoContainer');
-historicoContainer.innerHTML = '';
-const entries = (acionamento.historico_status && Array.isArray(acionamento.historico_status)) ? acionamento.historico_status : [];
-if (entries.length > 0) {
-    // ordenar por data/hora se houver timestamp
-    entries.sort((a,b)=>{
-        const ta = a.timestamp ? new Date(a.timestamp).getTime() : new Date(a.data || 0).getTime();
-        const tb = b.timestamp ? new Date(b.timestamp).getTime() : new Date(b.data || 0).getTime();
-        return ta - tb;
-    });
-    entries.forEach(entry => {
-        const p = document.createElement('p');
-        const when = entry.timestamp ? new Date(entry.timestamp).toLocaleString('pt-BR') : (entry.data ? new Date(entry.data).toLocaleString('pt-BR') : '');
-        const usuarioNome = entry.usuario_nome || entry.usuario || (currentUser ? currentUser.name : '');
-        let line = `<strong>${when}</strong> - ${usuarioNome} `;
-        if (entry.tipo === 'STATUS') {
-            line += `alterou o status: <em>${(entry.status_anterior||'-')}</em> → <em>${(entry.status_novo||'-')}</em>`;
-        } else if (entry.tipo === 'EDICAO' && entry.campo) {
-            line += `alterou <em>${entry.campo}</em>: '${entry.de ?? ''}' → '${entry.para ?? ''}'`;
-        } else if (entry.acao) {
-            line += `${entry.acao}`;
-        } else {
-            line += `fez uma alteração`;
-        }
-        p.innerHTML = line;
-        p.style.marginBottom = '0.5rem';
-        p.style.fontSize = '0.875rem';
-        historicoContainer.appendChild(p);
-    });
-} else {
-    historicoContainer.innerHTML = '<p>Nenhum histórico disponível.</p>';
-}
-// Configurar permissões de edição
+            // Configurar permissões de edição
             const isAdmin1 = currentUser.role === 'admin1';
             const status = acionamento.status || 'PENDENTE';
             const isFinalizado = status === 'FINALIZADO';
@@ -2120,164 +2092,115 @@ if (entries.length > 0) {
         }
 
         // Função para salvar edição
-        
-async function salvarEdicao() {
-        try {
-            const id = document.getElementById('editId').value;
-            const acionamentoRef = db.collection('acionamentos').doc(id);
-            const doc = await acionamentoRef.get();
-            const historicoAtual = doc.exists ? (doc.data().historico_status || []) : [];
+        async function salvarEdicao() {
+    try {
+        const id = document.getElementById('editId').value;
+        const ref = db.collection('acionamentos').doc(id);
+        const snap = await ref.get();
+        const before = snap.exists ? snap.data() : {};
 
-            // Construir objeto atualizado a partir do form
-            const atualizados = {
-                data_criacao_ocorrencia: document.getElementById('editDataCriacao').value,
-                horario_criacao_ocorrencia: document.getElementById('editHorarioCriacao').value,
-                equipe: document.getElementById('editEquipe').value,
-                tipo_equipe: document.getElementById('editTipoEquipe').value,
-                tipo_defeito: document.getElementById('editTipoDefeito').value,
-                alimentador: document.getElementById('editAlimentador').value,
-                tipo_referencia: document.getElementById('editTipoReferencia').value,
-                numero_referencia: document.getElementById('editNumeroReferencia').value,
-                clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
-                relatorio_ocorrencia: document.getElementById('editRelatorio').value,
-                materiais_necessarios: document.getElementById('editMateriais').value
-            };
+        // Helpers
+        const getVal = (elId) => {
+            const el = document.getElementById(elId);
+            return el ? el.value : null;
+        };
+        const toNull = (v) => (v === '' || v === undefined ? null : v);
 
-            // Campos que vamos auditar
-            const camposAuditar = [
-                'data_criacao_ocorrencia','horario_criacao_ocorrencia','equipe','tipo_equipe','tipo_defeito',
-                'alimentador','tipo_referencia','numero_referencia','clientes_interrompidos','relatorio_ocorrencia',
-                'materiais_necessarios'
-            ];
+        // Payload sem undefined
+        const payload = {
+            data_criacao_ocorrencia: toNull(getVal('editDataCriacao')),
+            horario_criacao_ocorrencia: toNull(getVal('editHorarioCriacao')),
+            equipe: toNull(getVal('editEquipe')),
+            tipo_equipe: toNull(getVal('editTipoEquipe')),
+            tipo_defeito: toNull(getVal('editTipoDefeito')),
+            alimentador: toNull(getVal('editAlimentador')),
+            tipo_referencia: toNull(getVal('editTipoReferencia')),
+            numero_referencia: toNull(getVal('editNumeroReferencia')),
+            clientes_interrompidos: toNull(getVal('editClientesInterrompidos')),
+            materiais_necessarios: toNull(getVal('editMateriais')),
+            relatorio_ocorrencia: toNull(getVal('editRelatorio')),
+        };
+        Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k]; });
 
-            const diffs = [];
-            const anterior = originalAcionamento || (doc.exists ? doc.data() : {});
-            const usuarioNome = currentUser && currentUser.name ? currentUser.name : (currentUser ? currentUser.username : 'usuário');
-
-            camposAuditar.forEach(campo => {
-                const de = (anterior && anterior[campo] !== undefined) ? String(anterior[campo]) : '';
-                const para = (atualizados[campo] !== undefined) ? String(atualizados[campo]) : '';
-                if (de !== para) {
-                    diffs.push({
-                        tipo: 'EDICAO',
-                        campo,
-                        de,
-                        para,
-                        usuario: currentUser ? currentUser.username : '',
-                        usuario_nome: usuarioNome,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            });
-
-            // Montar objeto final a ser salvo (somente campos editáveis + histórico)
-            const dadosAtualizados = {
-                ...atualizados,
-                historico_status: [...historicoAtual, ...diffs]
-            };
-
-            await acionamentoRef.update(dadosAtualizados);
-
-            closeEditModal();
-            await loadAcionamentos();
-
-            alert(diffs.length > 0 ? 'Alterações registradas e salvas!' : 'Nenhuma alteração detectada.');
-        } catch (error) {
-            console.error('Erro ao salvar edição:', error);
-            alert('Erro ao salvar alterações.');
-        }
-    }
-;
-
-                const dadosAtualizados = {
-                    data_criacao_ocorrencia: document.getElementById('editDataCriacao').value,
-                    horario_criacao_ocorrencia: document.getElementById('editHorarioCriacao').value,
-                    equipe: document.getElementById('editEquipe').value,
-                    tipo_equipe: document.getElementById('editTipoEquipe').value,
-                    tipo_defeito: document.getElementById('editTipoDefeito').value,
-                    alimentador: document.getElementById('editAlimentador').value,
-                    tipo_referencia: document.getElementById('editTipoReferencia').value,
-                    numero_referencia: document.getElementById('editNumeroReferencia').value,
-                    clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
-                    relatorio_ocorrencia: document.getElementById('editRelatorio').value,
-                    materiais_necessarios: document.getElementById('editMateriais').value,
-                    historico_status: [...historicoAtual, novoHistorico]
-                };
-
-                await acionamentoRef.update(dadosAtualizados);
-                
-                closeEditModal();
-                loadAcionamentos();
-                
-                alert('Acionamento atualizado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao salvar edição:', error);
-                alert('Erro ao salvar alterações.');
+        // Calcular mudanças (antes -> depois)
+        const campoLabel = {
+            data_criacao_ocorrencia: 'Data criação',
+            horario_criacao_ocorrencia: 'Hora criação',
+            equipe: 'Equipe',
+            tipo_equipe: 'Tipo de equipe',
+            tipo_defeito: 'Tipo de defeito',
+            alimentador: 'Alimentador',
+            tipo_referencia: 'Tipo de referência',
+            numero_referencia: 'Número de referência',
+            clientes_interrompidos: 'Clientes interrompidos',
+            materiais_necessarios: 'Materiais necessários',
+            relatorio_ocorrencia: 'Relatório'
+        };
+        const changes = [];
+        Object.keys(payload).forEach((k) => {
+            const beforeVal = (before && before[k] !== undefined ? before[k] : null);
+            const afterVal  = payload[k];
+            // Só registra se mudou de fato
+            if (String(beforeVal ?? '') !== String(afterVal ?? '')) {
+                changes.push({
+                    campo: k,
+                    label: campoLabel[k] || k,
+                    de: beforeVal ?? null,
+                    para: afterVal ?? null
+                });
             }
-        }
+        });
+
+        // Histórico com data/hora ISO
+        const agora = new Date();
+        const usuario = (currentUser && (currentUser.name || currentUser.username)) || 'Desconhecido';
+        const historicoEntry = {
+            dataHora: agora.toISOString(), // sempre válido p/ Date()
+            usuario: usuario,
+            acao: changes.length ? 'Edição de campos' : 'Edição sem alterações',
+            changes: changes
+        };
+
+        await ref.update({
+            ...payload,
+            historico: firebase.firestore.FieldValue.arrayUnion(historicoEntry),
+        });
+
+        alert('Alterações salvas com sucesso.');
+        closeEditModal();
+        loadAcionamentos();
+    } catch (err) {
+        console.error('Erro ao salvar edição:', err);
+        alert('Erro ao salvar edição: ' + (err && err.message ? err.message : err));
+    }
+}
 
         // Função para validar acionamento
-        
-async function validarAcionamento() {
-        try {
-            const id = document.getElementById('editId').value;
-            const acionamentoRef = db.collection('acionamentos').doc(id);
-            const doc = await acionamentoRef.get();
-            if (!doc.exists) throw new Error('Acionamento não encontrado');
-            const dataAtual = doc.data();
-            const historicoAtual = dataAtual.historico_status || [];
-            const statusAnterior = dataAtual.status || 'PENDENTE';
-            const statusNovo = 'ENVIADO';
+        async function validarAcionamento() {
+            try {
+                const id = document.getElementById('editId').value;
+                
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-            // Regras específicas por transição
-            const updates = { status: statusNovo };
-
-            if (statusNovo === 'ENVIADO') {
-                updates.data_envio = new Date().toISOString();
-            } else if (statusNovo === 'RECURSO_ALOCADO') {
-                const equipeSel = document.getElementById('editEquipe').value;
-                if (!equipeSel) {
-                    alert('Selecione a equipe antes de alocar o recurso.');
-                    return;
-                }
-                updates.equipe = equipeSel;
-                updates.data_alocacao = new Date().toISOString();
-            } else if (statusNovo === 'FINALIZADO') {
                 const agora = new Date();
-                updates.data_finalizacao = agora.toISOString().split('T')[0];
-                updates.hora_finalizacao = agora.toTimeString().split(' ')[0].substring(0,5);
-            }
-
-            const usuarioNome = currentUser && currentUser.name ? currentUser.name : (currentUser ? currentUser.username : 'usuário');
-            const entry = {
-                tipo: 'STATUS',
-                usuario: currentUser ? currentUser.username : '',
-                usuario_nome: usuarioNome,
-                status_anterior: statusAnterior,
-                status_novo: statusNovo,
-                timestamp: new Date().toISOString()
-            };
-
-            await acionamentoRef.update({
-                ...updates,
-                historico_status: [...historicoAtual, entry]
-            });
-
-            closeEditModal();
-            await loadAcionamentos();
-            alert('Status atualizado com sucesso!');
-        } catch (error) {
-            console.error('Erro ao atualizar status:', error);
-            alert('Erro ao atualizar status.');
-        }
-    }
-;
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.name + ' (' + currentUser.username + ')',
+                    acao: 'Acionamento validado e enviado',
+                    detalhes: {
+                        status_anterior: doc.exists ? doc.data().status : null,
+                        status_novo: 'ENVIADO'
+                    }
+                };
 
                 await acionamentoRef.update({
                     status: 'ENVIADO',
                     data_validacao: new Date().toISOString(),
                     validado_por: currentUser.username,
-                    historico_status: [...historicoAtual, novoHistorico]
+                    historico: [...historicoAtual, novoHistorico]
                 });
                 
                 closeEditModal();
@@ -2291,63 +2214,27 @@ async function validarAcionamento() {
         }
 
         // Função para alocar recurso
-        
-async function alocarRecurso() {
-        try {
-            const id = document.getElementById('editId').value;
-            const acionamentoRef = db.collection('acionamentos').doc(id);
-            const doc = await acionamentoRef.get();
-            if (!doc.exists) throw new Error('Acionamento não encontrado');
-            const dataAtual = doc.data();
-            const historicoAtual = dataAtual.historico_status || [];
-            const statusAnterior = dataAtual.status || 'PENDENTE';
-            const statusNovo = 'RECURSO_ALOCADO';
+        async function alocarRecurso() {
+            const equipe = prompt('Digite a equipe a ser alocada:');
+            if (!equipe) return;
+            
+            try {
+                const id = document.getElementById('editId').value;
+                
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-            // Regras específicas por transição
-            const updates = { status: statusNovo };
-
-            if (statusNovo === 'ENVIADO') {
-                updates.data_envio = new Date().toISOString();
-            } else if (statusNovo === 'RECURSO_ALOCADO') {
-                const equipeSel = document.getElementById('editEquipe').value;
-                if (!equipeSel) {
-                    alert('Selecione a equipe antes de alocar o recurso.');
-                    return;
-                }
-                updates.equipe = equipeSel;
-                updates.data_alocacao = new Date().toISOString();
-            } else if (statusNovo === 'FINALIZADO') {
                 const agora = new Date();
-                updates.data_finalizacao = agora.toISOString().split('T')[0];
-                updates.hora_finalizacao = agora.toTimeString().split(' ')[0].substring(0,5);
-            }
-
-            const usuarioNome = currentUser && currentUser.name ? currentUser.name : (currentUser ? currentUser.username : 'usuário');
-            const entry = {
-                tipo: 'STATUS',
-                usuario: currentUser ? currentUser.username : '',
-                usuario_nome: usuarioNome,
-                status_anterior: statusAnterior,
-                status_novo: statusNovo,
-                timestamp: new Date().toISOString()
-            };
-
-            await acionamentoRef.update({
-                ...updates,
-                historico_status: [...historicoAtual, entry]
-            });
-
-            closeEditModal();
-            await loadAcionamentos();
-            alert('Status atualizado com sucesso!');
-        } catch (error) {
-            console.error('Erro ao atualizar status:', error);
-            alert('Erro ao atualizar status.');
-        }
-    }
-`,
-                    status_anterior: 'ENVIADO',
-                    status_novo: 'RECURSO_ALOCADO'
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.name + ' (' + currentUser.username + ')',
+                    acao: `Recurso alocado - Equipe: ${equipe}`,
+                    detalhes: {
+                        status_anterior: doc.exists ? doc.data().status : null,
+                        status_novo: 'RECURSO_ALOCADO'
+                    }
                 };
 
                 await acionamentoRef.update({
@@ -2355,7 +2242,7 @@ async function alocarRecurso() {
                     data_alocacao: new Date().toISOString(),
                     alocado_por: currentUser.username,
                     equipe: equipe,
-                    historico_status: [...historicoAtual, novoHistorico]
+                    historico: [...historicoAtual, novoHistorico]
                 });
                 
                 closeEditModal();
@@ -2369,67 +2256,31 @@ async function alocarRecurso() {
         }
 
         // Função para finalizar acionamento
-        
-async function finalizarAcionamento() {
-        try {
-            const id = document.getElementById('editId').value;
-            const acionamentoRef = db.collection('acionamentos').doc(id);
-            const doc = await acionamentoRef.get();
-            if (!doc.exists) throw new Error('Acionamento não encontrado');
-            const dataAtual = doc.data();
-            const historicoAtual = dataAtual.historico_status || [];
-            const statusAnterior = dataAtual.status || 'PENDENTE';
-            const statusNovo = 'FINALIZADO';
+        async function finalizarAcionamento() {
+            try {
+                const id = document.getElementById('editId').value;
+                
+                const acionamentoRef = db.collection('acionamentos').doc(id);
+                const doc = await acionamentoRef.get();
+                const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-            // Regras específicas por transição
-            const updates = { status: statusNovo };
-
-            if (statusNovo === 'ENVIADO') {
-                updates.data_envio = new Date().toISOString();
-            } else if (statusNovo === 'RECURSO_ALOCADO') {
-                const equipeSel = document.getElementById('editEquipe').value;
-                if (!equipeSel) {
-                    alert('Selecione a equipe antes de alocar o recurso.');
-                    return;
-                }
-                updates.equipe = equipeSel;
-                updates.data_alocacao = new Date().toISOString();
-            } else if (statusNovo === 'FINALIZADO') {
                 const agora = new Date();
-                updates.data_finalizacao = agora.toISOString().split('T')[0];
-                updates.hora_finalizacao = agora.toTimeString().split(' ')[0].substring(0,5);
-            }
-
-            const usuarioNome = currentUser && currentUser.name ? currentUser.name : (currentUser ? currentUser.username : 'usuário');
-            const entry = {
-                tipo: 'STATUS',
-                usuario: currentUser ? currentUser.username : '',
-                usuario_nome: usuarioNome,
-                status_anterior: statusAnterior,
-                status_novo: statusNovo,
-                timestamp: new Date().toISOString()
-            };
-
-            await acionamentoRef.update({
-                ...updates,
-                historico_status: [...historicoAtual, entry]
-            });
-
-            closeEditModal();
-            await loadAcionamentos();
-            alert('Status atualizado com sucesso!');
-        } catch (error) {
-            console.error('Erro ao atualizar status:', error);
-            alert('Erro ao atualizar status.');
-        }
-    }
-;
+                const novoHistorico = {
+                    data: agora.toISOString().split('T')[0],
+                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    usuario: currentUser.name + ' (' + currentUser.username + ')',
+                    acao: 'Acionamento finalizado',
+                    detalhes: {
+                        status_anterior: doc.exists ? doc.data().status : null,
+                        status_novo: 'FINALIZADO'
+                    }
+                };
 
                 await acionamentoRef.update({
                     status: 'FINALIZADO',
                     data_finalizacao: new Date().toISOString(),
                     finalizado_por: currentUser.username,
-                    historico_status: [...historicoAtual, novoHistorico]
+                    historico: [...historicoAtual, novoHistorico]
                 });
                 
                 closeEditModal();
@@ -2570,16 +2421,16 @@ async function finalizarAcionamento() {
             };
             
             acionamentos.forEach(acionamento => {
-                const historico = acionamento.historico_status || [];
+                const historico = acionamento.historico || [];
                 let dataPendente, dataEnviado, dataRecurso, dataFinalizado;
                 
                 // Encontrar datas de transição
                 historico.forEach(evento => {
-                    if (evento.status_anterior === 'PENDENTE' && evento.status_novo === 'ENVIADO') {
+                    if (evento.detalhes?.status_anterior === 'PENDENTE' && evento.detalhes?.status_novo === 'ENVIADO') {
                         dataEnviado = new Date(`${evento.data}T${evento.hora}`);
-                    } else if (evento.status_anterior === 'ENVIADO' && evento.status_novo === 'RECURSO_ALOCADO') {
+                    } else if (evento.detalhes?.status_anterior === 'ENVIADO' && evento.detalhes?.status_novo === 'RECURSO_ALOCADO') {
                         dataRecurso = new Date(`${evento.data}T${evento.hora}`);
-                    } else if (evento.status_anterior === 'RECURSO_ALOCADO' && evento.status_novo === 'FINALIZADO') {
+                    } else if (evento.detalhes?.status_anterior === 'RECURSO_ALOCADO' && evento.detalhes?.status_novo === 'FINALIZADO') {
                         dataFinalizado = new Date(`${evento.data}T${evento.hora}`);
                     }
                 });
@@ -2671,7 +2522,7 @@ async function finalizarAcionamento() {
                 function getHistoricoByStatus(historico, status) {
                     if (!historico || !Array.isArray(historico)) return { data: '', hora: '', usuario: '' };
                     
-                    const entrada = historico.find(h => h.status_novo === status);
+                    const entrada = historico.find(h => h.detalhes?.status_novo === status);
                     return entrada ? {
                         data: entrada.data || '',
                         hora: entrada.hora || '',
@@ -2681,7 +2532,7 @@ async function finalizarAcionamento() {
                 
                 // Preparar dados para exportação
                 const exportData = dataToExport.map(acionamento => {
-                    const historico = acionamento.historico_status || [];
+                    const historico = acionamento.historico || [];
                     
                     // Extrair dados do histórico para cada status
                     const pendente = getHistoricoByStatus(historico, 'PENDENTE');
