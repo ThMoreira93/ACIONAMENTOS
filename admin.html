@@ -2203,7 +2203,7 @@
             
             
             // Configurar botões de ação
-            document.getElementById('salvarBtn').style.display = (!isFinalizado && status !== 'CANCELADO') ? 'inline-flex' : 'none';
+            document.getElementById('salvarBtn').style.display = (status !== 'FINALIZADO' && status !== 'CANCELADO') ? 'inline-flex' : 'none';
             document.getElementById('validarBtn').style.display = (status === 'PENDENTE' && isAdmin1) ? 'inline-flex' : 'none';
             document.getElementById('alocarBtn').style.display = (status === 'ENVIADO') ? 'inline-flex' : 'none';
             document.getElementById('finalizarBtn').style.display = (status === 'RECURSO_ALOCADO') ? 'inline-flex' : 'none';
@@ -2308,7 +2308,27 @@
                 const doc = await acionamentoRef.get();
                 const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-                const agora = new Date();
+                
+                // Bloqueio extra: não permitir edição em FINALIZADO/CANCELADO
+                const statusAtual = doc.exists ? (doc.data().status || 'PENDENTE') : 'PENDENTE';
+                if (statusAtual === 'FINALIZADO' || statusAtual === 'CANCELADO') {
+                    alert('Não é possível editar quando o acionamento está FINALIZADO ou CANCELADO.');
+                    return;
+                }
+const agora = new Date();
+                // Sanitizador para remover/converter undefined em null (Firestore não aceita undefined)
+                const limparUndefinedDeep = (v) => {
+                    if (Array.isArray(v)) return v.map(limparUndefinedDeep);
+                    if (v && typeof v === 'object') {
+                        const o = {};
+                        Object.keys(v).forEach(k => {
+                            const vv = limparUndefinedDeep(v[k]);
+                            if (vv !== undefined) o[k] = vv;
+                        });
+                        return o;
+                    }
+                    return v === undefined ? null : v;
+                };
                 const novoHistorico = {
                     data: agora.toISOString().split('T')[0],
                     hora: agora.toTimeString().split(' ')[0].substring(0, 5),
@@ -2322,18 +2342,18 @@
                 // Obter valores atuais para comparação
                 const dadosAtuais = doc.exists ? doc.data() : {};
                 const dadosAtualizados = {
-                    data_criacao_ocorrencia: document.getElementById('editDataCriacao').value,
-                    horario_criacao_ocorrencia: document.getElementById('editHorarioCriacao').value,
-                    equipe: document.getElementById('editEquipe').value,
-                    tipo_equipe: document.getElementById('editTipoEquipe').value,
-                    tipo_defeito: document.getElementById('editTipoDefeito').value,
-                    alimentador: document.getElementById('editAlimentador').value,
-                    tipo_referencia: document.getElementById('editTipoReferencia').value,
-                    numero_referencia: document.getElementById('editNumeroReferencia').value,
-                    clientes_interrompidos: document.getElementById('editClientesInterrompidos').value,
-                    relatorio_ocorrencia: document.getElementById('editRelatorio').value,
-                    materiais_necessarios: document.getElementById('editMateriais').value,
-                    historico: [...historicoAtual, novoHistorico]
+                    data_criacao_ocorrencia: (document.getElementById('editDataCriacao')?.value ?? ''),
+                    horario_criacao_ocorrencia: (document.getElementById('editHorarioCriacao')?.value ?? ''),
+                    equipe: (document.getElementById('editEquipe')?.value ?? ''),
+                    tipo_equipe: (document.getElementById('editTipoEquipe')?.value ?? ''),
+                    tipo_defeito: (document.getElementById('editTipoDefeito')?.value ?? ''),
+                    alimentador: (document.getElementById('editAlimentador')?.value ?? ''),
+                    tipo_referencia: (document.getElementById('editTipoReferencia')?.value ?? ''),
+                    numero_referencia: (document.getElementById('editNumeroReferencia')?.value ?? ''),
+                    clientes_interrompidos: (document.getElementById('editClientesInterrompidos')?.value ?? ''),
+                    relatorio_ocorrencia: (document.getElementById('editRelatorio')?.value ?? ''),
+                    materiais_necessarios: (document.getElementById('editMateriais')?.value ?? ''),
+                    historico: [...historicoAtual, limparUndefinedDeep(novoHistorico)]
                 };
 
                 // Identificar campos alterados
@@ -2350,7 +2370,17 @@
 
                 // Atualizar apenas se houver alterações
                 if (novoHistorico.detalhes.campos_alterados.length > 0) {
-                    await acionamentoRef.update(dadosAtualizados);
+                    // enviar apenas campos modificados + historico
+                    const dadosAtualizadosLimpos = {};
+                    Object.keys(dadosAtualizados).forEach(k => {
+                        if (k === 'historico') { dadosAtualizadosLimpos[k] = dadosAtualizados[k]; return; }
+                        const antes = (dadosAtuais || {})[k];
+                        const depois = dadosAtualizados[k];
+                        if (String(antes ?? '') !== String(depois ?? '')) {
+                            dadosAtualizadosLimpos[k] = (depois === undefined ? null : depois);
+                        }
+                    });
+                    await acionamentoRef.update(dadosAtualizadosLimpos);
                     
                     closeEditModal();
                     loadAcionamentos();
@@ -2361,7 +2391,7 @@
                 }
             } catch (error) {
                 console.error('Erro ao salvar edição:', error);
-                alert('Erro ao salvar alterações.');
+                alert('Erro ao salvar alterações: ' + (error && (error.message || error.code) || 'desconhecido'));
             }
         }
 
