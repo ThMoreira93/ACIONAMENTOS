@@ -1271,7 +1271,8 @@
                         
                         <div class="kpi-card" data-status="FINALIZADO" onclick="filterByStatus('FINALIZADO')">
                             <h3 id="kpiFinalizados" class="kpi-value">0</h3>
-                            <p class="kpi-label">Finalizados</p>
+                            <!-- Contabiliza finalizados e cancelados juntos -->
+                            <p class="kpi-label">Finalizados / Cancelados</p>
                         </div>
                         
                         <div class="kpi-card" data-status="TODOS" onclick="filterByStatus('TODOS')">
@@ -1293,6 +1294,38 @@
                             <h3 class="chart-title">Distribuição por Tipo de Equipe</h3>
                             <div class="chart-container">
                                 <canvas id="tipoEquipeChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Novo gráfico: Distribuição por Tipo de Defeito -->
+                        <div class="chart-card">
+                            <h3 class="chart-title">Distribuição por Tipo de Defeito</h3>
+                            <div class="chart-container">
+                                <canvas id="tipoDefeitoChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Novo gráfico: Top 5 Acionamentos com mais Clientes Interrompidos -->
+                        <div class="chart-card">
+                            <h3 class="chart-title">Top 5 Acionamentos - Clientes Interrompidos</h3>
+                            <div class="chart-container">
+                                <canvas id="topClientesChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Novo gráfico: Top 10 Alimentadores com mais Acionamentos -->
+                        <div class="chart-card">
+                            <h3 class="chart-title">Top 10 Alimentadores - Acionamentos</h3>
+                            <div class="chart-container">
+                                <canvas id="topAlimentadoresChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Novo gráfico: Top 5 ocorrências com maior tempo desde a criação -->
+                        <div class="chart-card">
+                            <h3 class="chart-title">Top 5 Tempo desde Criação (horas)</h3>
+                            <div class="chart-container">
+                                <canvas id="topTempoChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -1555,6 +1588,12 @@
         let sessionTimeout = null;
         let currentFilter = 'TODOS';
         let charts = {};
+// Paleta de cores para gráficos dinâmicos
+const colorPalette = [
+    '#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4',
+    '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107',
+    '#ff9800', '#ff5722', '#795548', '#607d8b'
+];
         let currentTableData = []; // Para armazenar os dados atuais da tabela
 
         const SESSION_DURATION = 30 * 60 * 1000; // 30 minutos
@@ -1820,7 +1859,12 @@
                 document.getElementById('dashboardSection').classList.remove('d-none');
                 document.getElementById('acionamentosSection').classList.add('d-none');
                 document.getElementById('pageTitle').textContent = 'Dashboard';
+                // Carregar métricas do dashboard
                 loadDashboard();
+                // Criar gráficos (inclui gráficos adicionais) com os dados atuais
+                createCharts();
+                // Atualizar gráficos com filtros atuais
+                updateCharts();
             } else {
                 document.getElementById('dashboardSection').classList.add('d-none');
                 document.getElementById('acionamentosSection').classList.remove('d-none');
@@ -1880,9 +1924,14 @@
                         'COM_RECURSO_ALOCADO': 'RECURSO_ALOCADO',
                         'OCORRENCIAS_FINALIZADAS': 'FINALIZADO'
                     };
-                    filteredAcionamentos = acionamentos.filter(a => a.status === statusMap[currentStatus]);
+                    if (currentStatus === 'OCORRENCIAS_FINALIZADAS') {
+                        // Incluir cancelados junto com finalizados
+                        filteredAcionamentos = acionamentos.filter(a => a.status === 'FINALIZADO' || a.status === 'CANCELADO');
+                    } else {
+                        filteredAcionamentos = acionamentos.filter(a => a.status === statusMap[currentStatus]);
+                    }
                 } else {
-                    // Para ADMIN2, filtrar acionamentos pendentes em "todas as ocorrências"
+                    // Para ADMIN2, filtrar acionamentos pendentes e cancelados em "todas as ocorrências"
                     if (currentUser.role === 'admin2') {
                         filteredAcionamentos = acionamentos.filter(a => a.status !== 'PENDENTE' && a.status !== 'CANCELADO');
                     }
@@ -2051,8 +2100,15 @@
                     const statusCell = row.querySelector('td:nth-child(9)');
                     if (statusCell) {
                         const statusText = statusCell.textContent.toLowerCase();
-                        if (!statusText.includes(filterType)) {
-                            showRow = false;
+                        // Incluir cancelados no filtro de finalizados
+                        if (filterType === 'finalizado') {
+                            if (!(statusText.includes('finalizado') || statusText.includes('cancelado'))) {
+                                showRow = false;
+                            }
+                        } else {
+                            if (!statusText.includes(filterType)) {
+                                showRow = false;
+                            }
                         }
                     }
                 }
@@ -2107,7 +2163,8 @@
             const pendentes = acionamentos.filter(a => a.status === 'PENDENTE').length;
             const enviados = acionamentos.filter(a => a.status === 'ENVIADO').length;
             const recurso = acionamentos.filter(a => a.status === 'RECURSO_ALOCADO').length;
-            const finalizadas = acionamentos.filter(a => a.status === 'FINALIZADO').length;
+            // Contabilizar finalizados e cancelados juntos
+            const finalizadas = acionamentos.filter(a => a.status === 'FINALIZADO' || a.status === 'CANCELADO').length;
             
             document.getElementById('pendentesCount').textContent = pendentes;
             document.getElementById('enviadosCount').textContent = enviados;
@@ -2521,7 +2578,8 @@ function loadDashboard() {
         document.getElementById('kpiPendentes').textContent = acionamentos.filter(a=>a.status==='PENDENTE').length;
         document.getElementById('kpiEnviados').textContent = acionamentos.filter(a=>a.status==='ENVIADO').length;
         document.getElementById('kpiRecurso').textContent = acionamentos.filter(a=>a.status==='RECURSO_ALOCADO').length;
-        document.getElementById('kpiFinalizados').textContent = acionamentos.filter(a=>a.status==='FINALIZADO').length;
+        // Contabilizar finalizados e cancelados juntos no KPI
+        document.getElementById('kpiFinalizados').textContent = acionamentos.filter(a => a.status === 'FINALIZADO' || a.status === 'CANCELADO').length;
         document.getElementById('kpiTodos').textContent = acionamentos.length;
 
         const diffs = { 'Pendente → Enviado': [], 'Enviado → Recurso': [], 'Recurso → Finalizado': [] };
@@ -2578,6 +2636,138 @@ function loadDashboard() {
             // Destruir gráficos existentes
             Object.values(charts).forEach(chart => {
                 if (chart) chart.destroy();
+            });
+
+            // Gráfico de distribuição por tipo de defeito
+            const tipoDefeitoData = getTipoDefeitoData();
+            const ctx4 = document.getElementById('tipoDefeitoChart').getContext('2d');
+            charts.tipoDefeito = new Chart(ctx4, {
+                type: 'bar',
+                data: {
+                    labels: tipoDefeitoData.labels,
+                    datasets: [{
+                        label: 'Quantidade',
+                        data: tipoDefeitoData.data,
+                        backgroundColor: colorPalette.slice(0, tipoDefeitoData.labels.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            display: true,
+                            color: '#000',
+                            font: { weight: 'bold' },
+                            formatter: function(value) {
+                                return value > 0 ? value : '';
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Gráfico Top 5 acionamentos por clientes interrompidos
+            const topClientesData = getTopClientesData();
+            const ctx5 = document.getElementById('topClientesChart').getContext('2d');
+            charts.topClientes = new Chart(ctx5, {
+                type: 'bar',
+                data: {
+                    labels: topClientesData.labels,
+                    datasets: [{
+                        label: 'Clientes Interrompidos',
+                        data: topClientesData.data,
+                        backgroundColor: colorPalette.slice(0, topClientesData.labels.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            display: true,
+                            color: '#000',
+                            font: { weight: 'bold' },
+                            formatter: function(value) {
+                                return value > 0 ? value : '';
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Gráfico Top 10 alimentadores por acionamentos
+            const topAlimentadoresData = getTopAlimentadoresData();
+            const ctx6 = document.getElementById('topAlimentadoresChart').getContext('2d');
+            charts.topAlimentadores = new Chart(ctx6, {
+                type: 'bar',
+                data: {
+                    labels: topAlimentadoresData.labels,
+                    datasets: [{
+                        label: 'Acionamentos',
+                        data: topAlimentadoresData.data,
+                        backgroundColor: colorPalette.slice(0, topAlimentadoresData.labels.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            display: true,
+                            color: '#000',
+                            font: { weight: 'bold' },
+                            formatter: function(value) {
+                                return value > 0 ? value : '';
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Gráfico Top 5 maior tempo desde a criação da ocorrência
+            const topTempoData = getTopTempoData();
+            const ctx7 = document.getElementById('topTempoChart').getContext('2d');
+            charts.topTempo = new Chart(ctx7, {
+                type: 'bar',
+                data: {
+                    labels: topTempoData.labels,
+                    datasets: [{
+                        label: 'Tempo (h)',
+                        data: topTempoData.data,
+                        backgroundColor: colorPalette.slice(0, topTempoData.labels.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            display: true,
+                            color: '#000',
+                            font: { weight: 'bold' },
+                            formatter: function(value) {
+                                return value > 0 ? value.toFixed(2) + 'h' : '';
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
             });
             
             // Gráfico de tempo entre status
@@ -2668,7 +2858,13 @@ function loadDashboard() {
                 recursoFinalizado: { total: 0, count: 0 }
             };
             
-            acionamentos.forEach(acionamento => {
+            // Excluir finalizados e cancelados e aplicar filtro
+            let tempData = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
+            if (currentFilter !== 'TODOS') {
+                tempData = tempData.filter(a => a.status === currentFilter);
+            }
+
+            tempData.forEach(acionamento => {
                 const historico = acionamento.historico || [];
                 let dataPendente, dataEnviado, dataRecurso, dataFinalizado;
                 
@@ -2727,14 +2923,51 @@ function loadDashboard() {
                 charts.tipoEquipe.data.datasets[0].data = getTipoEquipeData();
                 charts.tipoEquipe.update();
             }
+
+            // Atualizar gráfico por tipo de defeito
+            if (charts.tipoDefeito) {
+                const tipoDefeitoData = getTipoDefeitoData();
+                charts.tipoDefeito.data.labels = tipoDefeitoData.labels;
+                charts.tipoDefeito.data.datasets[0].data = tipoDefeitoData.data;
+                charts.tipoDefeito.data.datasets[0].backgroundColor = colorPalette.slice(0, tipoDefeitoData.labels.length);
+                charts.tipoDefeito.update();
+            }
+
+            // Atualizar gráfico Top 5 clientes interrompidos
+            if (charts.topClientes) {
+                const topClientesData = getTopClientesData();
+                charts.topClientes.data.labels = topClientesData.labels;
+                charts.topClientes.data.datasets[0].data = topClientesData.data;
+                charts.topClientes.data.datasets[0].backgroundColor = colorPalette.slice(0, topClientesData.labels.length);
+                charts.topClientes.update();
+            }
+
+            // Atualizar gráfico Top 10 alimentadores
+            if (charts.topAlimentadores) {
+                const topAlimentadoresData = getTopAlimentadoresData();
+                charts.topAlimentadores.data.labels = topAlimentadoresData.labels;
+                charts.topAlimentadores.data.datasets[0].data = topAlimentadoresData.data;
+                charts.topAlimentadores.data.datasets[0].backgroundColor = colorPalette.slice(0, topAlimentadoresData.labels.length);
+                charts.topAlimentadores.update();
+            }
+
+            // Atualizar gráfico Top 5 tempos desde criação
+            if (charts.topTempo) {
+                const topTempoData = getTopTempoData();
+                charts.topTempo.data.labels = topTempoData.labels;
+                charts.topTempo.data.datasets[0].data = topTempoData.data;
+                charts.topTempo.data.datasets[0].backgroundColor = colorPalette.slice(0, topTempoData.labels.length);
+                charts.topTempo.update();
+            }
         }
 
         // Função para obter dados por tipo de equipe
         function getTipoEquipeData() {
-            let filteredData = acionamentos;
+            // Excluir finalizados e cancelados e aplicar filtro
+            let filteredData = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
             
             if (currentFilter !== 'TODOS') {
-                filteredData = acionamentos.filter(a => a.status === currentFilter);
+                filteredData = filteredData.filter(a => a.status === currentFilter);
             }
             
             const pesada = filteredData.filter(a => a.tipo_equipe?.includes('PESADA')).length;
@@ -2743,6 +2976,78 @@ function loadDashboard() {
             const leve = filteredData.filter(a => a.tipo_equipe === 'LEVE').length;
             
             return [pesada, poda, linhaViva, leve];
+        }
+
+        // Função para agrupar dados por tipo de defeito (excluindo finalizados e cancelados)
+        function getTipoDefeitoData() {
+            let data = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
+            if (currentFilter !== 'TODOS') {
+                data = data.filter(a => a.status === currentFilter);
+            }
+            const counts = {};
+            data.forEach(a => {
+                const tipo = a.tipo_defeito || 'Indefinido';
+                counts[tipo] = (counts[tipo] || 0) + 1;
+            });
+            const labels = Object.keys(counts);
+            const values = Object.values(counts);
+            return { labels: labels, data: values };
+        }
+
+        // Função para obter top 5 acionamentos com mais clientes interrompidos
+        function getTopClientesData() {
+            let data = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
+            if (currentFilter !== 'TODOS') {
+                data = data.filter(a => a.status === currentFilter);
+            }
+            // Converter clientes_interrompidos em número e remover valores não numéricos
+            const list = data.map(a => {
+                const valor = parseInt(a.clientes_interrompidos || 0);
+                return { id: a.numero_ocorrencia || a.id, valor: isNaN(valor) ? 0 : valor };
+            });
+            // Ordenar por valor descendente e pegar top 5
+            list.sort((a, b) => b.valor - a.valor);
+            const top = list.slice(0, 5);
+            return { labels: top.map(item => item.id), data: top.map(item => item.valor) };
+        }
+
+        // Função para obter top 10 alimentadores com mais acionamentos
+        function getTopAlimentadoresData() {
+            let data = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
+            if (currentFilter !== 'TODOS') {
+                data = data.filter(a => a.status === currentFilter);
+            }
+            const counts = {};
+            data.forEach(a => {
+                const key = a.alimentador || 'Indefinido';
+                counts[key] = (counts[key] || 0) + 1;
+            });
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            return { labels: sorted.map(item => item[0]), data: sorted.map(item => item[1]) };
+        }
+
+        // Função auxiliar para calcular horas desde a criação da ocorrência
+        function horasDesdeCriacao(acionamento) {
+            if (!acionamento.data_criacao_ocorrencia) return 0;
+            const inicio = acionamento.horario_criacao_ocorrencia ? new Date(`${acionamento.data_criacao_ocorrencia}T${acionamento.horario_criacao_ocorrencia}`) : new Date(acionamento.data_criacao_ocorrencia);
+            if (isNaN(inicio.getTime())) return 0;
+            const agora = new Date();
+            const diffMs = agora - inicio;
+            return diffMs / 3600000; // horas
+        }
+
+        // Função para obter top 5 acionamentos com maior tempo desde a criação
+        function getTopTempoData() {
+            let data = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
+            if (currentFilter !== 'TODOS') {
+                data = data.filter(a => a.status === currentFilter);
+            }
+            const list = data.map(a => {
+                return { id: a.numero_ocorrencia || a.id, tempo: horasDesdeCriacao(a) };
+            });
+            list.sort((a, b) => b.tempo - a.tempo);
+            const top = list.slice(0, 5);
+            return { labels: top.map(item => item.id), data: top.map(item => parseFloat(item.tempo.toFixed(2))) };
         }
 
         // Função para exportar para Excel
@@ -2758,7 +3063,12 @@ function loadDashboard() {
                         'COM_RECURSO_ALOCADO': 'RECURSO_ALOCADO',
                         'OCORRENCIAS_FINALIZADAS': 'FINALIZADO'
                     };
-                    dataToExport = acionamentos.filter(a => a.status === statusMap[currentStatus]);
+                    if (currentStatus === 'OCORRENCIAS_FINALIZADAS') {
+                        // Exportar finalizados e cancelados juntos
+                        dataToExport = acionamentos.filter(a => a.status === 'FINALIZADO' || a.status === 'CANCELADO');
+                    } else {
+                        dataToExport = acionamentos.filter(a => a.status === statusMap[currentStatus]);
+                    }
                 } else {
                     // Para ADMIN2, filtrar acionamentos pendentes
                     if (currentUser.role === 'admin2') {
