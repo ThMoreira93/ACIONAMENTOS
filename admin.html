@@ -1594,6 +1594,23 @@ const colorPalette = [
     '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107',
     '#ff9800', '#ff5722', '#795548', '#607d8b'
 ];
+
+        // Função auxiliar para obter data e hora local respeitando o fuso horário do usuário (America/Bahia)
+        // Retorna um objeto com a data (yyyy-mm-dd) e a hora (HH:MM) no horário local.
+        function getLocalDateParts() {
+            const now = new Date();
+            // Use toLocaleDateString com o locale 'en-CA' que gera yyyy-mm-dd por padrão
+            // e defina explicitamente o fuso horário de Bahia para evitar deslocamentos inesperados.
+            const datePart = now.toLocaleDateString('en-CA', { timeZone: 'America/Bahia' });
+            // Use toLocaleTimeString com hora de 24 horas para obter HH:MM no fuso de Bahia
+            const timePart = now.toLocaleTimeString('pt-BR', {
+                timeZone: 'America/Bahia',
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            return { date: datePart, time: timePart };
+        }
         let currentTableData = []; // Para armazenar os dados atuais da tabela
 
         const SESSION_DURATION = 30 * 60 * 1000; // 30 minutos
@@ -2199,9 +2216,58 @@ const colorPalette = [
             if (acionamento.historico && acionamento.historico.length > 0) {
                 acionamento.historico.forEach(entry => {
                     const p = document.createElement('p');
-                    const date = new Date(entry.data).toLocaleString('pt-BR');
-                    p.innerHTML = `<strong>${date}</strong> - ${entry.usuario}: ${entry.acao}`;
-                    p.style.marginBottom = '0.5rem';
+                    // Determinar data e hora considerando diferentes formatos
+                    let displayDate = '';
+                    if (entry.dataHora) {
+                        const dt = new Date(entry.dataHora);
+                        const datePart = dt.toLocaleDateString('pt-BR');
+                        const timePart = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                        displayDate = `${datePart} ${timePart}`;
+                    } else if (entry.data && entry.hora) {
+                        displayDate = `${entry.data} ${entry.hora}`;
+                    } else if (entry.data) {
+                        // Parse YYYY-MM-DD sem deslocamento de fuso
+                        const parts = entry.data.split('-');
+                        if (parts.length === 3) {
+                            displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                        } else {
+                            displayDate = entry.data;
+                        }
+                        if (entry.hora) {
+                            displayDate += ` ${entry.hora}`;
+                        }
+                    }
+                    p.innerHTML = `<strong>${displayDate}</strong> - ${entry.usuario}: ${entry.acao}`;
+                    // Adicionar detalhes das mudanças se houver
+                    let detailsHtml = '';
+                    if (entry.detalhes) {
+                        if (entry.detalhes.campos_alterados && entry.detalhes.campos_alterados.length > 0) {
+                            detailsHtml += '<ul>';
+                            entry.detalhes.campos_alterados.forEach(change => {
+                                const label = change.label || change.campo;
+                                const before = (change.valor_anterior !== undefined ? change.valor_anterior : (change.de !== undefined ? change.de : ''));
+                                const after = (change.valor_novo !== undefined ? change.valor_novo : (change.para !== undefined ? change.para : ''));
+                                detailsHtml += `<li>${label}: <em>${before || '-'}</em> → <strong>${after || '-'}</strong></li>`;
+                            });
+                            detailsHtml += '</ul>';
+                        } else if (entry.detalhes.status_anterior !== undefined || entry.detalhes.status_novo !== undefined) {
+                            const before = entry.detalhes.status_anterior || '-';
+                            const after = entry.detalhes.status_novo || '-';
+                            detailsHtml += `<p>Status: <em>${before}</em> → <strong>${after}</strong></p>`;
+                        }
+                    } else if (entry.changes && Array.isArray(entry.changes)) {
+                        // Suporte para formato antigo
+                        detailsHtml += '<ul>';
+                        entry.changes.forEach(change => {
+                            const label = change.label || change.campo;
+                            detailsHtml += `<li>${label}: <em>${change.de}</em> → <strong>${change.para}</strong></li>`;
+                        });
+                        detailsHtml += '</ul>';
+                    }
+                    if (detailsHtml) {
+                        p.innerHTML += detailsHtml;
+                    }
+                    p.style.marginBottom = '0.75rem';
                     p.style.fontSize = '0.875rem';
                     historicoContainer.appendChild(p);
                 });
@@ -2292,15 +2358,18 @@ const colorPalette = [
                 else if (atual === 'FINALIZADO') novo = 'RECURSO_ALOCADO';
                 else return;
                 
-                const agora = new Date();
+                const dateParts = getLocalDateParts();
                 const usuario = (currentUser && (currentUser.name || currentUser.username)) || 'Desconhecido';
                 const historicoEntry = {
-                    dataHora: agora.toISOString(),
+                    data: dateParts.date,
+                    hora: dateParts.time,
                     usuario: usuario,
                     acao: `Retroagir status: ${atual} → ${novo}`,
-                    changes: [{ campo: 'status', label: 'Status', de: atual, para: novo }]
+                    detalhes: {
+                        status_anterior: atual,
+                        status_novo: novo
+                    }
                 };
-                
                 await ref.update({
                     status: novo,
                     historico: firebase.firestore.FieldValue.arrayUnion(historicoEntry)
@@ -2328,18 +2397,22 @@ const colorPalette = [
                     return;
                 }
                 const motivo = prompt('Confirme o cancelamento. Opcionalmente, informe um motivo:');
-                const agora = new Date();
+                const dateParts = getLocalDateParts();
                 const usuario = (currentUser && (currentUser.name || currentUser.username)) || 'Desconhecido';
                 const historicoEntry = {
-                    dataHora: agora.toISOString(),
+                    data: dateParts.date,
+                    hora: dateParts.time,
                     usuario: usuario,
                     acao: 'Cancelamento de acionamento',
-                    changes: [{ campo: 'status', label: 'Status', de: atual, para: 'CANCELADO' }],
-                    motivo: motivo || null
+                    motivo: motivo || null,
+                    detalhes: {
+                        status_anterior: atual,
+                        status_novo: 'CANCELADO'
+                    }
                 };
                 await ref.update({
                     status: 'CANCELADO',
-                    data_cancelamento: agora.toISOString(),
+                    data_cancelamento: new Date().toISOString(),
                     historico: firebase.firestore.FieldValue.arrayUnion(historicoEntry)
                 });
                 alert('Acionamento cancelado.');
@@ -2372,7 +2445,7 @@ const colorPalette = [
                     alert('Não é possível editar quando o acionamento está FINALIZADO ou CANCELADO.');
                     return;
                 }
-const agora = new Date();
+const dateParts = getLocalDateParts();
                 // Sanitizador para remover/converter undefined em null (Firestore não aceita undefined)
                 const limparUndefinedDeep = (v) => {
                     if (Array.isArray(v)) return v.map(limparUndefinedDeep);
@@ -2387,8 +2460,8 @@ const agora = new Date();
                     return v === undefined ? null : v;
                 };
                 const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    data: dateParts.date,
+                    hora: dateParts.time,
                     usuario: currentUser.name + ' (' + currentUser.username + ')',
                     acao: 'Dados editados',
                     detalhes: {
@@ -2415,10 +2488,25 @@ const agora = new Date();
 
                 // Identificar campos alterados
                 const campos = Object.keys(dadosAtualizados);
+                // Mapeia nomes internos para rótulos mais amigáveis no histórico
+                const labelMap = {
+                    data_criacao_ocorrencia: 'Data de Criação da Ocorrência',
+                    horario_criacao_ocorrencia: 'Horário de Criação da Ocorrência',
+                    equipe: 'Equipe',
+                    tipo_equipe: 'Tipo de Equipe',
+                    tipo_defeito: 'Tipo de Defeito',
+                    alimentador: 'Alimentador',
+                    tipo_referencia: 'Tipo de Referência',
+                    numero_referencia: 'Número de Referência',
+                    clientes_interrompidos: 'Clientes Interrompidos',
+                    relatorio_ocorrencia: 'Relatório da Ocorrência',
+                    materiais_necessarios: 'Materiais Necessários'
+                };
                 campos.forEach(campo => {
                     if (campo !== 'historico' && dadosAtuais[campo] !== dadosAtualizados[campo]) {
                         novoHistorico.detalhes.campos_alterados.push({
                             campo: campo,
+                            label: labelMap[campo] || campo,
                             valor_anterior: dadosAtuais[campo],
                             valor_novo: dadosAtualizados[campo]
                         });
@@ -2461,10 +2549,10 @@ const agora = new Date();
                 const doc = await acionamentoRef.get();
                 const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-                const agora = new Date();
+                const dateParts = getLocalDateParts();
                 const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    data: dateParts.date,
+                    hora: dateParts.time,
                     usuario: currentUser.name + ' (' + currentUser.username + ')',
                     acao: 'Acionamento validado e enviado',
                     detalhes: {
@@ -2502,10 +2590,10 @@ const agora = new Date();
                 const doc = await acionamentoRef.get();
                 const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-                const agora = new Date();
+                const dateParts = getLocalDateParts();
                 const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    data: dateParts.date,
+                    hora: dateParts.time,
                     usuario: currentUser.name + ' (' + currentUser.username + ')',
                     acao: `Recurso alocado - Equipe: ${equipe}`,
                     detalhes: {
@@ -2541,10 +2629,10 @@ const agora = new Date();
                 const doc = await acionamentoRef.get();
                 const historicoAtual = doc.exists ? doc.data().historico || [] : [];
 
-                const agora = new Date();
+                const dateParts = getLocalDateParts();
                 const novoHistorico = {
-                    data: agora.toISOString().split('T')[0],
-                    hora: agora.toTimeString().split(' ')[0].substring(0, 5),
+                    data: dateParts.date,
+                    hora: dateParts.time,
                     usuario: currentUser.name + ' (' + currentUser.username + ')',
                     acao: 'Acionamento finalizado',
                     detalhes: {
