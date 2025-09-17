@@ -780,11 +780,6 @@
         }
 
         /* Modal */
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -2050,7 +2045,7 @@ const colorPalette = [
             console.log(`Tabela renderizada com ${data.length} acionamentos`);
         }
 
-        // Função para calcular tempo decorrido (congela quando status é RECURSO_ALOCADO ou FINALIZADO)
+        // Função para calcular tempo decorrido (congela somente quando status é FINALIZADO ou CANCELADO)
         function calcularTempoDecorrido(dataInicio, horaInicio = null, acionamento) {
             if (!dataInicio) return '-';
             
@@ -2065,16 +2060,16 @@ const colorPalette = [
             
             let fim;
             
-            // Congelar tempo quando status for RECURSO_ALOCADO ou FINALIZADO
-            if (acionamento.status === 'RECURSO_ALOCADO' && acionamento.data_alocacao) {
-                fim = new Date(acionamento.data_alocacao);
-            } else if (acionamento.status === 'FINALIZADO' && acionamento.data_finalizacao) {
+            // Congelar tempo quando status for FINALIZADO ou CANCELADO; continuar contando para RECURSO_ALOCADO
+            if (acionamento.status === 'FINALIZADO' && acionamento.data_finalizacao) {
                 fim = new Date(acionamento.data_finalizacao);
                 if (acionamento.hora_finalizacao) {
                     // Combinar data e hora de finalização
                     const [hours, minutes] = acionamento.hora_finalizacao.split(':');
                     fim.setHours(parseInt(hours), parseInt(minutes));
                 }
+            } else if (acionamento.status === 'CANCELADO' && acionamento.data_cancelamento) {
+                fim = new Date(acionamento.data_cancelamento);
             } else {
                 fim = new Date(); // Usa a data/hora atual
             }
