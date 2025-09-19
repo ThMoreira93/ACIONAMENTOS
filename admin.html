@@ -780,11 +780,6 @@
         }
 
         /* Modal */
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -1997,7 +1992,7 @@ const colorPalette = [
             data.forEach(acionamento => {
                 const row = document.createElement('tr');
                 
-                // Calcular tempos (com congelamento quando status for Recurso Alocado ou Finalizado)
+                // Calcular tempos (congelar apenas quando status for Cancelado ou Finalizado)
                 const tempoDesdeCreacao = calcularTempoDecorrido(
                     acionamento.data_criacao_ocorrencia, 
                     acionamento.horario_criacao_ocorrencia,
@@ -2050,7 +2045,7 @@ const colorPalette = [
             console.log(`Tabela renderizada com ${data.length} acionamentos`);
         }
 
-        // Função para calcular tempo decorrido (congela quando status é RECURSO_ALOCADO ou FINALIZADO)
+        // Função para calcular tempo decorrido (congela quando status é CANCELADO ou FINALIZADO)
         function calcularTempoDecorrido(dataInicio, horaInicio = null, acionamento) {
             if (!dataInicio) return '-';
             
@@ -2065,9 +2060,9 @@ const colorPalette = [
             
             let fim;
             
-            // Congelar tempo quando status for RECURSO_ALOCADO ou FINALIZADO
-            if (acionamento.status === 'RECURSO_ALOCADO' && acionamento.data_alocacao) {
-                fim = new Date(acionamento.data_alocacao);
+            // Congelar tempo quando status for CANCELADO ou FINALIZADO
+            if (acionamento.status === 'CANCELADO' && acionamento.data_cancelamento) {
+                fim = new Date(acionamento.data_cancelamento);
             } else if (acionamento.status === 'FINALIZADO' && acionamento.data_finalizacao) {
                 fim = new Date(acionamento.data_finalizacao);
                 if (acionamento.hora_finalizacao) {
