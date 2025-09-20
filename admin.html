@@ -1585,9 +1585,8 @@
         let charts = {};
 // Paleta de cores para gráficos dinâmicos
 const colorPalette = [
-    '#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4',
-    '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107',
-    '#ff9800', '#ff5722', '#795548', '#607d8b'
+    '#1F497D', '#2E86AB', '#4FB0C6', '#7BBF6A', '#F6C85F',
+    '#E07A5F', '#3D405B', '#6C757D', '#A3A3A3', '#D9E2EC'
 ];
 
         // Função auxiliar para obter data e hora local respeitando o fuso horário do usuário (America/Bahia)
@@ -2045,51 +2044,76 @@ const colorPalette = [
             console.log(`Tabela renderizada com ${data.length} acionamentos`);
         }
 
-        // Função para calcular tempo decorrido (congela quando status é CANCELADO ou FINALIZADO)
-        function calcularTempoDecorrido(dataInicio, horaInicio = null, acionamento) {
-            if (!dataInicio) return '-';
-            
-            let inicio;
-            if (horaInicio) {
-                inicio = new Date(`${dataInicio}T${horaInicio}`);
-            } else {
-                inicio = new Date(dataInicio);
-            }
-            
-            if (isNaN(inicio.getTime())) return '-';
-            
-            let fim;
-            
-            // Congelar tempo quando status for CANCELADO ou FINALIZADO
-            if (acionamento.status === 'CANCELADO' && acionamento.data_cancelamento) {
-                fim = new Date(acionamento.data_cancelamento);
-            } else if (acionamento.status === 'FINALIZADO' && acionamento.data_finalizacao) {
-                fim = new Date(acionamento.data_finalizacao);
-                if (acionamento.hora_finalizacao) {
-                    // Combinar data e hora de finalização
-                    const [hours, minutes] = acionamento.hora_finalizacao.split(':');
-                    fim.setHours(parseInt(hours), parseInt(minutes));
-                }
-            } else {
-                fim = new Date(); // Usa a data/hora atual
-            }
+        
+// Helper: parse date + time as local Date object (robust against different formats)
+function parseDateTimeLocal(dateStr, timeStr) {
+    if (!dateStr) return null;
+    // Normalize date expected as YYYY-MM-DD
+    const dateParts = String(dateStr).split('-');
+    let year, month, day;
+    if (dateParts.length === 3) {
+        year = parseInt(dateParts[0], 10);
+        month = parseInt(dateParts[1], 10) - 1;
+        day = parseInt(dateParts[2], 10);
+    } else {
+        // fallback to Date parser
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        return d;
+    }
 
-            const diffMs = fim - inicio;
-            
-            if (diffMs < 0) return '-';
-            
-            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-            
-            if (diffHours > 0) {
-                return `${diffHours}h ${diffMinutes}m`;
-            } else {
-                return `${diffMinutes}m`;
-            }
-        }
+    // Normalize time HH:MM or HH:MM:SS
+    let hh = 0, mm = 0, ss = 0;
+    if (timeStr) {
+        const t = String(timeStr).split(':');
+        hh = parseInt(t[0] || 0, 10);
+        mm = parseInt(t[1] || 0, 10);
+        ss = parseInt(t[2] || 0, 10);
+    }
 
-        // Função para filtrar tabela
-        function filterTable(filterType) {
+    return new Date(year, month, day, hh, mm, ss);
+}
+
+// Função para calcular tempo decorrido (congela quando status é CANCELADO ou FINALIZADO)
+// Agora usa parseDateTimeLocal e evita tempos negativos (ignora diffs negativos e retorna '0m' em vez de valores negativos)
+function calcularTempoDecorrido(dataInicio, horaInicio = null, acionamento) {
+    if (!dataInicio) return '-';
+
+    const inicio = parseDateTimeLocal(dataInicio, horaInicio);
+    if (!inicio || isNaN(inicio.getTime())) return '-';
+
+    let fim = null;
+
+    // Congelar tempo quando status for CANCELADO ou FINALIZADO
+    if (acionamento.status === 'CANCELADO' && acionamento.data_cancelamento) {
+        fim = parseDateTimeLocal(acionamento.data_cancelamento, acionamento.hora_cancelamento || null) || new Date(acionamento.data_cancelamento);
+    } else if (acionamento.status === 'FINALIZADO' && acionamento.data_finalizacao) {
+        fim = parseDateTimeLocal(acionamento.data_finalizacao, acionamento.hora_finalizacao || null) || new Date(acionamento.data_finalizacao);
+    } else {
+        fim = new Date(); // Usa a data/hora atual
+    }
+
+    if (!fim || isNaN(fim.getTime())) return '-';
+
+    const diffMs = fim - inicio;
+
+    // Evitar valores negativos — pode ocorrer por dados inconsistentes; nesses casos retornamos '0m' ao invés de negativo.
+    if (diffMs <= 0) {
+        return '0m';
+    }
+
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (diffHours > 0) {
+        return `${diffHours}h ${diffMinutes}m`;
+    } else {
+        return `${diffMinutes}m`;
+    }
+}
+
+
+function filterTable(filterType) {
             const searchText = document.getElementById('searchInput').value.toLowerCase();
             const rows = document.querySelectorAll('#acionamentosTableBody tr');
             const filterButtons = document.querySelectorAll('.filter-button');
@@ -2830,7 +2854,8 @@ function loadDashboard() {
                     datasets: [{
                         label: 'Tempo (h)',
                         data: topTempoData.data,
-                        backgroundColor: colorPalette.slice(0, topTempoData.labels.length)
+                        backgroundColor: colorPalette.slice(0, topTempoData.labels.length),
+                        borderRadius: 6
                     }]
                 },
                 options: {
@@ -2933,67 +2958,87 @@ function loadDashboard() {
             });
         }
 
-        // Função para calcular tempo médio entre transições de status
-        function getTempoMedioTransicoes() {
-            const transicoes = {
-                pendenteEnviado: { total: 0, count: 0 },
-                enviadoRecurso: { total: 0, count: 0 },
-                recursoFinalizado: { total: 0, count: 0 }
-            };
-            
-            // Excluir finalizados e cancelados e aplicar filtro
-            let tempData = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
-            if (currentFilter !== 'TODOS') {
-                tempData = tempData.filter(a => a.status === currentFilter);
-            }
+        
+// Função para calcular tempo médio entre transições de status (versão reforçada)
+function getTempoMedioTransicoes() {
+    const transicoes = {
+        pendenteEnviado: { total: 0, count: 0 },
+        enviadoRecurso: { total: 0, count: 0 },
+        recursoFinalizado: { total: 0, count: 0 }
+    };
 
-            tempData.forEach(acionamento => {
-                const historico = acionamento.historico || [];
-                let dataPendente, dataEnviado, dataRecurso, dataFinalizado;
-                
-                // Encontrar datas de transição
-                historico.forEach(evento => {
-                    if (evento.detalhes?.status_anterior === 'PENDENTE' && evento.detalhes?.status_novo === 'ENVIADO') {
-                        dataEnviado = new Date(`${evento.data}T${evento.hora}`);
-                    } else if (evento.detalhes?.status_anterior === 'ENVIADO' && evento.detalhes?.status_novo === 'RECURSO_ALOCADO') {
-                        dataRecurso = new Date(`${evento.data}T${evento.hora}`);
-                    } else if (evento.detalhes?.status_anterior === 'RECURSO_ALOCADO' && evento.detalhes?.status_novo === 'FINALIZADO') {
-                        dataFinalizado = new Date(`${evento.data}T${evento.hora}`);
-                    }
-                });
-                
-                // Calcular tempo de criação para enviado
-                if (dataEnviado) {
-                    const dataCriacao = new Date(`${acionamento.data_criacao_ocorrencia}T${acionamento.horario_criacao_ocorrencia}`);
-                    const diffMs = dataEnviado - dataCriacao;
-                    transicoes.pendenteEnviado.total += diffMs;
-                    transicoes.pendenteEnviado.count++;
-                }
-                
-                // Calcular tempo de enviado para recurso
-                if (dataRecurso && dataEnviado) {
-                    const diffMs = dataRecurso - dataEnviado;
-                    transicoes.enviadoRecurso.total += diffMs;
-                    transicoes.enviadoRecurso.count++;
-                }
-                
-                // Calcular tempo de recurso para finalizado
-                if (dataFinalizado && dataRecurso) {
-                    const diffMs = dataFinalizado - dataRecurso;
-                    transicoes.recursoFinalizado.total += diffMs;
-                    transicoes.recursoFinalizado.count++;
-                }
-            });
-            
-            // Calcular médias em horas
-            const medias = [
-                transicoes.pendenteEnviado.count > 0 ? transicoes.pendenteEnviado.total / (transicoes.pendenteEnviado.count * 3600000) : 0,
-                transicoes.enviadoRecurso.count > 0 ? transicoes.enviadoRecurso.total / (transicoes.enviadoRecurso.count * 3600000) : 0,
-                transicoes.recursoFinalizado.count > 0 ? transicoes.recursoFinalizado.total / (transicoes.recursoFinalizado.count * 3600000) : 0
-            ];
-            
-            return medias;
+    // Excluir finalizados e cancelados e aplicar filtro
+    let tempData = acionamentos.filter(a => a.status !== 'FINALIZADO' && a.status !== 'CANCELADO');
+    if (currentFilter !== 'TODOS') {
+        tempData = tempData.filter(a => a.status === currentFilter);
+    }
+
+    tempData.forEach(acionamento => {
+        const historico = acionamento.historico || [];
+        let dataEnviado = null, dataRecurso = null, dataFinalizado = null;
+
+        // Encontrar datas de transição (procura a primeira ocorrência relevante)
+        historico.forEach(evento => {
+            const prev = evento.detalhes?.status_anterior;
+            const next = evento.detalhes?.status_novo;
+            const evDate = evento.data;
+            const evHora = evento.hora;
+            if (!evDate) return;
+            if (!dataEnviado && prev === 'PENDENTE' && next === 'ENVIADO') {
+                dataEnviado = parseDateTimeLocal(evDate, evHora) || new Date(`${evDate}T${evHora}`);
+            } else if (!dataRecurso && prev === 'ENVIADO' && next === 'RECURSO_ALOCADO') {
+                dataRecurso = parseDateTimeLocal(evDate, evHora) || new Date(`${evDate}T${evHora}`);
+            } else if (!dataFinalizado && prev === 'RECURSO_ALOCADO' && next === 'FINALIZADO') {
+                dataFinalizado = parseDateTimeLocal(evDate, evHora) || new Date(`${evDate}T${evHora}`);
+            }
+        });
+
+        // Calcular tempo de criação para enviado
+        if (dataEnviado) {
+            const dataCriacao = parseDateTimeLocal(acionamento.data_criacao_ocorrencia, acionamento.horario_criacao_ocorrencia) || new Date(`${acionamento.data_criacao_ocorrencia}T${acionamento.horario_criacao_ocorrencia}`);
+            const diffMs = dataEnviado - dataCriacao;
+            if (diffMs > 0) {
+                transicoes.pendenteEnviado.total += diffMs;
+                transicoes.pendenteEnviado.count++;
+            } else {
+                // dados inconsistentes; ignorar este registro
+                console.warn('Ignorado diff negativo pendente->enviado para', acionamento.id || acionamento.numero_ocorrencia);
+            }
         }
+
+        // Calcular tempo de enviado para recurso
+        if (dataRecurso && dataEnviado) {
+            const diffMs = dataRecurso - dataEnviado;
+            if (diffMs > 0) {
+                transicoes.enviadoRecurso.total += diffMs;
+                transicoes.enviadoRecurso.count++;
+            } else {
+                console.warn('Ignorado diff negativo enviado->recurso para', acionamento.id || acionamento.numero_ocorrencia);
+            }
+        }
+
+        // Calcular tempo de recurso para finalizado
+        if (dataFinalizado && dataRecurso) {
+            const diffMs = dataFinalizado - dataRecurso;
+            if (diffMs > 0) {
+                transicoes.recursoFinalizado.total += diffMs;
+                transicoes.recursoFinalizado.count++;
+            } else {
+                console.warn('Ignorado diff negativo recurso->finalizado para', acionamento.id || acionamento.numero_ocorrencia);
+            }
+        }
+    });
+
+    // Calcular médias em horas (converter ms -> horas)
+    const medias = [
+        transicoes.pendenteEnviado.count > 0 ? transicoes.pendenteEnviado.total / (transicoes.pendenteEnviado.count * 3600000) : 0,
+        transicoes.enviadoRecurso.count > 0 ? transicoes.enviadoRecurso.total / (transicoes.enviadoRecurso.count * 3600000) : 0,
+        transicoes.recursoFinalizado.count > 0 ? transicoes.recursoFinalizado.total / (transicoes.recursoFinalizado.count * 3600000) : 0
+    ];
+
+    return medias;
+}
+
 
         // Função para atualizar gráficos
         function updateCharts() {
